@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+openai
+python-multipart
+pillow 
+dotenv
+asyncpg
+SQLAlchemy>=2.0
+python-dotenv
+greenlet
+asyncpg 
+numpy
+requests
