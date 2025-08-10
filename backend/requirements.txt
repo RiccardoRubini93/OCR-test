@@ -11,3 +11,5 @@ greenlet
 asyncpg 
 numpy
 requests
+pytesseract
+opencv-python-headless

@@ -1,6 +1,6 @@
 import base64
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageOps, ImageFilter
 import os
 import requests
 
@@ -16,6 +16,25 @@ def image_to_base64(image_file) -> str:
     image.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return img_str
+
+
+def pil_image_to_base64_png(image: Image.Image) -> str:
+    buffered = BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+
+def preprocess_image_for_ocr(image: Image.Image) -> Image.Image:
+    """
+    Light preprocessing to improve OCR performance:
+    - Convert to grayscale
+    - Auto-contrast
+    - Slight sharpen
+    """
+    img = image.convert("L")
+    img = ImageOps.autocontrast(img)
+    img = img.filter(ImageFilter.SHARPEN)
+    return img
 
 
 def ollama_generate(prompt, model="llama3"):

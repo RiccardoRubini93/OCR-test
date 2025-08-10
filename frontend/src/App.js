@@ -3,6 +3,7 @@ import SavedTexts from './SavedTexts';
 import QueryTexts from './QueryTexts';
 import SimilaritySearch from './SimilaritySearch';
 import StatsAndQuery from './StatsAndQuery';
+import { apiUrl } from './api';
 
 // Global style injection for demo
 const globalStyle = `
@@ -43,7 +44,7 @@ function App() {
 
   useEffect(() => {
     if (provider === 'ollama') {
-      fetch('http://localhost:8000/ollama/models')
+      fetch(apiUrl('/ollama/models'))
         .then(res => res.json())
         .then(data => {
           if (data.models) {
@@ -74,7 +75,7 @@ function App() {
     setError('');
     const formData = new FormData();
     formData.append('file', file);
-    let url = `http://localhost:8000/ocr/?provider=${provider}`;
+    let url = apiUrl(`/ocr/?provider=${provider}`);
     if (provider === 'ollama' && ollamaModel) {
       url += `&model=${encodeURIComponent(ollamaModel)}`;
     }
@@ -115,33 +116,22 @@ function App() {
     }
   };
 
-  // Modern nav bar
+  // Replace nav and mainBox with Bootstrap classes and add a style tag for mobile tweaks
+
   const nav = (
-    <nav style={{
-      width: '100%',
-      background: '#000',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderBottom: '1px solid #222',
-      padding: '0 0 0 0',
-      marginBottom: 40,
-      minHeight: 64,
-      position: 'sticky',
-      top: 0,
-      zIndex: 10,
-    }}>
-      <div style={{ display: 'flex', gap: 24 }}>
-        <button onClick={() => setPage('ocr')} style={navBtnStyle(page === 'ocr')}>OCR Image</button>
-        <button onClick={() => setPage('saved')} style={navBtnStyle(page === 'saved')}>Saved Texts</button>
-        <button onClick={() => setPage('query')} style={navBtnStyle(page === 'query')}>Query Texts</button>
-        <button onClick={() => setPage('similarity')} style={navBtnStyle(page === 'similarity')}>Similarity Search</button>
-        <button onClick={() => setPage('stats')} style={navBtnStyle(page === 'stats')}>Stats & Query</button>
+    <nav className="navbar navbar-expand-lg navbar-dark bg-black sticky-top mb-4" style={{ borderBottom: '1px solid #222', minHeight: 64, zIndex: 10 }}>
+      <div className="container-fluid justify-content-center">
+        <div className="d-flex flex-wrap gap-2 gap-md-4">
+          <button onClick={() => setPage('ocr')} className={`btn ${page === 'ocr' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'ocr')}>OCR Image</button>
+          <button onClick={() => setPage('saved')} className={`btn ${page === 'saved' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'saved')}>Saved Texts</button>
+          <button onClick={() => setPage('query')} className={`btn ${page === 'query' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'query')}>Query Texts</button>
+          <button onClick={() => setPage('similarity')} className={`btn ${page === 'similarity' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'similarity')}>Similarity Search</button>
+          <button onClick={() => setPage('stats')} className={`btn ${page === 'stats' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'stats')}>Stats & Query</button>
+        </div>
       </div>
     </nav>
   );
 
-  // Main content box style
   const mainBox = {
     width: '100%',
     maxWidth: 1100,
@@ -157,11 +147,28 @@ function App() {
     alignItems: 'center',
   };
 
+  // Add a style tag for mobile tweaks
+  const mobileStyle = `
+  @media (max-width: 600px) {
+    h1, h2, h4 { font-size: 7vw !important; }
+    .navbar .btn { font-size: 4vw !important; padding: 8px 12px !important; }
+    .container-fluid, .main-responsive-box { padding: 0 2vw !important; }
+    .main-responsive-box { padding: 24px 2vw !important; border-radius: 18px !important; }
+    form, .main-responsive-box { min-width: 0 !important; }
+  }
+  `;
+  if (typeof document !== 'undefined' && !document.getElementById('mobile-style')) {
+    const style = document.createElement('style');
+    style.id = 'mobile-style';
+    style.innerHTML = mobileStyle;
+    document.head.appendChild(style);
+  }
+
   if (page === 'saved') {
     return (
       <>
         {nav}
-        <div style={mainBox}>
+        <div className="main-responsive-box" style={mainBox}>
           <SavedTexts />
         </div>
       </>
@@ -172,7 +179,7 @@ function App() {
     return (
       <>
         {nav}
-        <div style={mainBox}>
+        <div className="main-responsive-box" style={mainBox}>
           <QueryTexts />
         </div>
       </>
@@ -183,7 +190,7 @@ function App() {
     return (
       <>
         {nav}
-        <div style={mainBox}>
+        <div className="main-responsive-box" style={mainBox}>
           <SimilaritySearch />
         </div>
       </>
@@ -194,7 +201,7 @@ function App() {
     return (
       <>
         {nav}
-        <div style={mainBox}>
+        <div className="main-responsive-box" style={mainBox}>
           <StatsAndQuery />
         </div>
       </>
@@ -204,7 +211,7 @@ function App() {
   return (
     <>
       {nav}
-      <div style={mainBox}>
+      <div className="main-responsive-box" style={mainBox}>
         <h1 style={{ fontSize: 48, marginBottom: 8, ...accentText, letterSpacing: 0.5 }}>OCR Image to Text</h1>
         <p style={{ color: '#bfc9d9', marginBottom: 32, fontSize: 22, maxWidth: 700, textAlign: 'center' }}>
           Upload an image and extract the text within it using AI. Choose your preferred LLM provider and model.
@@ -235,11 +242,12 @@ function App() {
           }}
           onClick={() => document.getElementById('file-upload').click()}
         >
-          {file ? file.name : dragActive ? 'Drop your image here...' : 'Drag & drop your image here or click to select'}
+          {file ? file.name : dragActive ? 'Drop your image here...' : 'Tap to take a photo or choose an image (or drag & drop)'}
           <input
             id="file-upload"
             type="file"
             accept="image/*"
+            capture="environment"
             onChange={handleFileChange}
             style={{ display: 'none' }}
           />

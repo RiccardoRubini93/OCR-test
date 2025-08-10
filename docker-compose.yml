@@ -33,6 +33,7 @@ services:
     command: ["npm", "start"]
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - HOST=0.0.0.0
 
   ollama:
     image: ollama/ollama
