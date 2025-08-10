@@ -3,6 +3,7 @@ import SavedTexts from './SavedTexts';
 import QueryTexts from './QueryTexts';
 import SimilaritySearch from './SimilaritySearch';
 import StatsAndQuery from './StatsAndQuery';
+import Summarize from './Summarize';
 import { apiUrl } from './api';
 
 // Global style injection for demo
@@ -127,6 +128,7 @@ function App() {
           <button onClick={() => setPage('query')} className={`btn ${page === 'query' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'query')}>Query Texts</button>
           <button onClick={() => setPage('similarity')} className={`btn ${page === 'similarity' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'similarity')}>Similarity Search</button>
           <button onClick={() => setPage('stats')} className={`btn ${page === 'stats' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'stats')}>Stats & Query</button>
+          <button onClick={() => setPage('summarize')} className={`btn ${page === 'summarize' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'summarize')}>Summarize</button>
         </div>
       </div>
     </nav>
@@ -203,6 +205,17 @@ function App() {
         {nav}
         <div className="main-responsive-box" style={mainBox}>
           <StatsAndQuery />
+        </div>
+      </>
+    );
+  }
+
+  if (page === 'summarize') {
+    return (
+      <>
+        {nav}
+        <div className="main-responsive-box" style={mainBox}>
+          <Summarize />
         </div>
       </>
     );

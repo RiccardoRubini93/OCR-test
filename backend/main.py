@@ -261,3 +261,56 @@ def get_ollama_models():
         return {"models": models}
     except Exception as e:
         return {"error": str(e)} 
+
+class SummarizeRequest(BaseModel):
+    text_id: int | None = None
+    text: str | None = None
+    provider: str | None = None
+    model: str | None = None
+
+
+@app.post("/texts/summarize")
+async def summarize_text(body: SummarizeRequest):
+    use_provider = body.provider or DEFAULT_PROVIDER
+    text_to_summarize = body.text
+
+    if text_to_summarize is None:
+        if body.text_id is None:
+            raise HTTPException(status_code=400, detail="Provide either text_id or text")
+        async with SessionLocal() as session:
+            result = await session.execute(select(HandwrittenText).where(HandwrittenText.id == body.text_id))
+            item = result.scalar_one_or_none()
+            if not item:
+                raise HTTPException(status_code=404, detail="Text not found")
+            text_to_summarize = item.text
+
+    try:
+        if use_provider == "ollama":
+            ollama_model = body.model or OLLAMA_MODEL
+            prompt = (
+                "Summarize the following text clearly and concisely in 3-5 bullet points. "
+                "Focus on key ideas and important details.\n\nTEXT:\n" + text_to_summarize
+            )
+            summary = ollama_generate(prompt, model=ollama_model)
+            provider_used = f"ollama:{ollama_model}"
+        else:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            "Summarize the following text clearly and concisely in 3-5 bullet points. "
+                            "Focus on key ideas and important details.\n\nTEXT:\n" + text_to_summarize
+                        ),
+                    }
+                ],
+                max_tokens=400,
+            )
+            summary = response.choices[0].message.content
+            provider_used = "openai:gpt-4o"
+        return {"summary": summary, "provider": provider_used}
+    except Exception as e:
+        print("Exception in /texts/summarize:", e)
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)}) 
