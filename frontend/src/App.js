@@ -41,20 +41,26 @@ function App() {
   const [provider, setProvider] = useState('openai');
   const [ollamaModels, setOllamaModels] = useState([]);
   const [ollamaModel, setOllamaModel] = useState('llama3');
+  const [ollamaOnlyRunning, setOllamaOnlyRunning] = useState(false);
+  const [ollamaModelsRefresh, setOllamaModelsRefresh] = useState(0);
   const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     if (provider === 'ollama') {
-      fetch(apiUrl('/ollama/models'))
+      const endpoint = ollamaOnlyRunning ? '/ollama/models/running' : '/ollama/models';
+      fetch(apiUrl(endpoint))
         .then(res => res.json())
         .then(data => {
           if (data.models) {
             setOllamaModels(data.models);
-            setOllamaModel(data.models[0] || 'llama3');
+            setOllamaModel(prev => (data.models.includes(prev) ? prev : (data.models[0] || 'llama3')));
+          } else {
+            setOllamaModels([]);
           }
-        });
+        })
+        .catch(() => setOllamaModels([]));
     }
-  }, [provider]);
+  }, [provider, ollamaOnlyRunning, ollamaModelsRefresh]);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -280,19 +286,28 @@ function App() {
               <option value="ollama">Ollama</option>
             </select>
           </div>
-          {provider === 'ollama' && ollamaModels.length > 0 && (
-            <div style={{ width: '100%', marginBottom: 18, display: 'flex', gap: 16, alignItems: 'center' }}>
+          {provider === 'ollama' && (
+            <div style={{ width: '100%', marginBottom: 18, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <label htmlFor="ollama-model-select" style={{ fontWeight: 600, color: '#fff', marginRight: 8, fontSize: 18 }}>Ollama Model:</label>
               <select
                 id="ollama-model-select"
                 value={ollamaModel}
                 onChange={e => setOllamaModel(e.target.value)}
                 style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, background: '#191919', color: '#fff', fontWeight: 600 }}
+                disabled={ollamaModels.length === 0}
               >
                 {ollamaModels.map(model => (
                   <option key={model} value={model}>{model}</option>
                 ))}
               </select>
+              <div className="form-check form-switch" style={{ color: '#bfc9d9', fontWeight: 600 }}>
+                <input className="form-check-input" type="checkbox" id="only-running-switch" checked={ollamaOnlyRunning} onChange={e => setOllamaOnlyRunning(e.target.checked)} />
+                <label className="form-check-label" htmlFor="only-running-switch">Only running</label>
+              </div>
+              <button type="button" className="btn btn-outline-light" onClick={() => setOllamaModelsRefresh(v => v + 1)} style={{ borderRadius: 10, padding: '8px 14px' }}>Refresh</button>
+              {ollamaModels.length === 0 && (
+                <span style={{ color: '#bfc9d9', fontSize: 14 }}>No models found. Toggle "Only running" off, start a model in Ollama, or refresh.</span>
+              )}
             </div>
           )}
           {preview && (

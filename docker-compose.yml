@@ -40,6 +40,9 @@ services:
     ports:
       - "11434:11434"
     restart: always
+    volumes:
+      - ollama_data:/root/.ollama
 
 volumes:
-  postgres_data: 
+  postgres_data:
+  ollama_data: 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { apiUrl } from './api';
+import { jsPDF } from 'jspdf';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
 const accentText = {
@@ -19,9 +20,67 @@ function Summarize() {
   const [provider, setProvider] = useState('openai');
   const [ollamaModels, setOllamaModels] = useState([]);
   const [ollamaModel, setOllamaModel] = useState('llama3');
+  const [ollamaOnlyRunning, setOllamaOnlyRunning] = useState(false);
+  const [ollamaModelsRefresh, setOllamaModelsRefresh] = useState(0);
 
   const [summary, setSummary] = useState('');
   const [loading, setLoading] = useState(false);
+  const [summaryLength, setSummaryLength] = useState('medium');
+  const [summaryFormat, setSummaryFormat] = useState('bullets');
+  const [instructions, setInstructions] = useState('');
+  const [showLengthInfo, setShowLengthInfo] = useState(false);
+
+  const handleSavePdf = () => {
+    if (!summary) return;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const marginX = 48;
+    const marginY = 56;
+    let cursorY = marginY;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('Summary', marginX, cursorY);
+    cursorY += 20;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    const meta = [
+      `Text ID: ${selectedId || '-'}`,
+      `Provider: ${provider}${provider === 'ollama' ? ` (${ollamaModel})` : ''}`,
+      `Length: ${summaryLength}`,
+      `Format: ${summaryFormat}`,
+      instructions ? `Instructions: ${instructions}` : null,
+    ].filter(Boolean).join('  |  ');
+    const metaLines = doc.splitTextToSize(meta, 540);
+    metaLines.forEach(line => {
+      if (cursorY > doc.internal.pageSize.getHeight() - marginY) {
+        doc.addPage();
+        cursorY = marginY;
+      }
+      doc.text(line, marginX, cursorY);
+      cursorY += 16;
+    });
+
+    cursorY += 8;
+    doc.setDrawColor(200);
+    doc.line(marginX, cursorY, doc.internal.pageSize.getWidth() - marginX, cursorY);
+    cursorY += 18;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    const contentLines = doc.splitTextToSize(summary, 540);
+    contentLines.forEach(line => {
+      if (cursorY > doc.internal.pageSize.getHeight() - marginY) {
+        doc.addPage();
+        cursorY = marginY;
+      }
+      doc.text(line, marginX, cursorY);
+      cursorY += 16;
+    });
+
+    const filenameBase = selectedId ? `summary_${selectedId}` : 'summary';
+    doc.save(`${filenameBase}.pdf`);
+  };
 
   useEffect(() => {
     const fetchTexts = async () => {
@@ -39,16 +98,20 @@ function Summarize() {
 
   useEffect(() => {
     if (provider === 'ollama') {
-      fetch(apiUrl('/ollama/models'))
+      const endpoint = ollamaOnlyRunning ? '/ollama/models/running' : '/ollama/models';
+      fetch(apiUrl(endpoint))
         .then(res => res.json())
         .then(data => {
           if (data.models) {
             setOllamaModels(data.models);
-            setOllamaModel(data.models[0] || 'llama3');
+            setOllamaModel(prev => (data.models.includes(prev) ? prev : (data.models[0] || 'llama3')));
+          } else {
+            setOllamaModels([]);
           }
-        });
+        })
+        .catch(() => setOllamaModels([]));
     }
-  }, [provider]);
+  }, [provider, ollamaOnlyRunning, ollamaModelsRefresh]);
 
   const selectedText = useMemo(() => {
     const id = Number(selectedId);
@@ -71,6 +134,9 @@ function Summarize() {
       provider,
       model: provider === 'ollama' ? ollamaModel : undefined,
       text_id: Number(selectedId),
+      summary_length: summaryLength,
+      format: summaryFormat,
+      instructions: instructions.trim() ? instructions.trim() : undefined,
     };
 
     try {
@@ -110,7 +176,7 @@ function Summarize() {
               <option value="ollama">Ollama</option>
             </select>
           </div>
-          {provider === 'ollama' && ollamaModels.length > 0 && (
+          {provider === 'ollama' && (
             <div className="col-12 col-md-6">
               <label htmlFor="ollama-model-select" className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Ollama Model</label>
               <select
@@ -119,11 +185,20 @@ function Summarize() {
                 onChange={e => setOllamaModel(e.target.value)}
                 className="form-select bg-dark text-white"
                 style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, fontWeight: 600 }}
+                disabled={ollamaModels.length === 0}
               >
                 {ollamaModels.map(model => (
                   <option key={model} value={model}>{model}</option>
                 ))}
               </select>
+              <div className="form-check form-switch mt-2" style={{ color: '#bfc9d9', fontWeight: 600 }}>
+                <input className="form-check-input" type="checkbox" id="only-running-switch-sum" checked={ollamaOnlyRunning} onChange={e => setOllamaOnlyRunning(e.target.checked)} />
+                <label className="form-check-label" htmlFor="only-running-switch-sum">Only running</label>
+              </div>
+              <button type="button" className="btn btn-outline-light mt-2" onClick={() => setOllamaModelsRefresh(v => v + 1)} style={{ borderRadius: 10, padding: '8px 14px' }}>Refresh</button>
+              {ollamaModels.length === 0 && (
+                <span style={{ color: '#bfc9d9', fontSize: 14, display: 'inline-block', marginTop: 8 }}>No models found. Toggle "Only running" off, start a model in Ollama, or refresh.</span>
+              )}
             </div>
           )}
         </div>
@@ -143,6 +218,43 @@ function Summarize() {
                 <option key={t.id} value={t.id}>{`#${t.id} ${t.filename ? `(${t.filename})` : ''}`}</option>
               ))}
             </select>
+            <div className="row g-2 mt-2">
+              <div className="col-6">
+                <div className="d-flex align-items-center justify-content-between">
+                  <label className="form-label m-0" style={{ color: '#fff', fontWeight: 600 }}>Length</label>
+                  <button type="button" className="btn btn-sm btn-outline-light" style={{ borderRadius: 8, padding: '2px 8px' }} onClick={() => setShowLengthInfo(v => !v)}>?</button>
+                </div>
+                <select
+                  value={summaryLength}
+                  onChange={e => setSummaryLength(e.target.value)}
+                  className="form-select bg-dark text-white"
+                  style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, fontWeight: 600 }}
+                >
+                  <option value="short">Short</option>
+                  <option value="medium">Medium</option>
+                  <option value="long">Long</option>
+                </select>
+                {showLengthInfo && (
+                  <div style={{ background: '#111', border: '1px solid #232323', borderRadius: 10, padding: 10, marginTop: 8, color: '#bfc9d9', fontSize: 14, boxShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+                    <div><b style={{ color: '#fff' }}>Short</b>: 2-3 sentences or up to 3 bullet points</div>
+                    <div><b style={{ color: '#fff' }}>Medium</b>: ~4-6 sentences or 3-5 bullet points</div>
+                    <div><b style={{ color: '#fff' }}>Long</b>: 1-2 paragraphs or 5-8 bullet points</div>
+                  </div>
+                )}
+              </div>
+              <div className="col-6">
+                <label className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Format</label>
+                <select
+                  value={summaryFormat}
+                  onChange={e => setSummaryFormat(e.target.value)}
+                  className="form-select bg-dark text-white"
+                  style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, fontWeight: 600 }}
+                >
+                  <option value="bullets">Bullets</option>
+                  <option value="plain">Plain Text</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div className="col-12 col-md-6">
             <label className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Preview</label>
@@ -153,6 +265,17 @@ function Summarize() {
                 <span>Select a saved text to preview it here.</span>
               )}
             </div>
+            <div className="mt-3">
+              <label className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Optional Instructions</label>
+              <input
+                type="text"
+                value={instructions}
+                onChange={e => setInstructions(e.target.value)}
+                placeholder="Add a short hint (optional)"
+                className="form-control bg-dark text-white"
+                style={{ padding: 12, borderRadius: 10, border: '1.5px solid #4f8cff', fontSize: 16, fontWeight: 500 }}
+              />
+            </div>
           </div>
         </div>
 
@@ -160,6 +283,11 @@ function Summarize() {
           <button type="submit" className="btn btn-primary" disabled={loading || !selectedId} style={{ borderRadius: 12, padding: '14px 36px', fontWeight: 700, fontSize: 18 }}>
             {loading ? 'Summarizing...' : 'Summarize'}
           </button>
+          {summary && (
+            <button type="button" onClick={handleSavePdf} className="btn btn-outline-light ms-2" style={{ borderRadius: 12, padding: '14px 24px', fontWeight: 700, fontSize: 18 }}>
+              Save as PDF
+            </button>
+          )}
         </div>
       </form>
 

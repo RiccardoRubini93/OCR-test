@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.responses import JSONResponse
 from utils import image_to_base64, ollama_generate, ollama_embedding, ollama_list_models, preprocess_image_for_ocr, pil_image_to_base64_png
+from utils import ollama_list_running_models
 from openai import OpenAI
 from dotenv import load_dotenv
 import traceback
@@ -262,17 +263,37 @@ def get_ollama_models():
     except Exception as e:
         return {"error": str(e)} 
 
+@app.get("/ollama/models/running")
+def get_ollama_running_models():
+    try:
+        models = ollama_list_running_models()
+        return {"models": models}
+    except Exception as e:
+        return {"error": str(e)}
+
 class SummarizeRequest(BaseModel):
     text_id: int | None = None
     text: str | None = None
     provider: str | None = None
     model: str | None = None
+    summary_length: str | None = None  # 'short' | 'medium' | 'long'
+    format: str | None = None          # 'bullets' | 'plain'
+    instructions: str | None = None    # optional extra guidance
 
 
 @app.post("/texts/summarize")
 async def summarize_text(body: SummarizeRequest):
     use_provider = body.provider or DEFAULT_PROVIDER
     text_to_summarize = body.text
+
+    # Defaults
+    length = (body.summary_length or "medium").lower()
+    if length not in {"short", "medium", "long"}:
+        length = "medium"
+    out_format = (body.format or "bullets").lower()
+    if out_format not in {"bullets", "plain"}:
+        out_format = "bullets"
+    extra = (body.instructions or "").strip()
 
     if text_to_summarize is None:
         if body.text_id is None:
@@ -284,32 +305,41 @@ async def summarize_text(body: SummarizeRequest):
                 raise HTTPException(status_code=404, detail="Text not found")
             text_to_summarize = item.text
 
+    # Construct prompt according to parameters
+    length_clause = {
+        "short": "Keep it very brief: 2-3 sentences OR 3 bullet points maximum.",
+        "medium": "Keep it concise: ~4-6 sentences OR 3-5 bullet points.",
+        "long": "Provide a detailed summary: 1-2 paragraphs OR 5-8 bullet points.",
+    }[length]
+    format_clause = "Return the summary as a bullet point list." if out_format == "bullets" else "Return the summary as plain prose text (no bullets)."
+    extra_clause = f" Additional guidance: {extra}" if extra else ""
+    prompt_header = (
+        "Summarize the following text. "
+        f"{length_clause} {format_clause}{extra_clause}\n\nTEXT:\n"
+    )
+
     try:
         if use_provider == "ollama":
             ollama_model = body.model or OLLAMA_MODEL
-            prompt = (
-                "Summarize the following text clearly and concisely in 3-5 bullet points. "
-                "Focus on key ideas and important details.\n\nTEXT:\n" + text_to_summarize
-            )
+            prompt = prompt_header + text_to_summarize
             summary = ollama_generate(prompt, model=ollama_model)
             provider_used = f"ollama:{ollama_model}"
         else:
+            # Adapt max tokens according to requested length
+            max_tokens = {"short": 250, "medium": 400, "long": 800}[length]
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
                         "role": "user",
-                        "content": (
-                            "Summarize the following text clearly and concisely in 3-5 bullet points. "
-                            "Focus on key ideas and important details.\n\nTEXT:\n" + text_to_summarize
-                        ),
+                        "content": prompt_header + text_to_summarize,
                     }
                 ],
-                max_tokens=400,
+                max_tokens=max_tokens,
             )
             summary = response.choices[0].message.content
             provider_used = "openai:gpt-4o"
-        return {"summary": summary, "provider": provider_used}
+        return {"summary": summary, "provider": provider_used, "length": length, "format": out_format}
     except Exception as e:
         print("Exception in /texts/summarize:", e)
         traceback.print_exc()
