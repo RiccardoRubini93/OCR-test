@@ -15,6 +15,7 @@ import numpy as np
 from pydantic import BaseModel
 from PIL import Image
 import pytesseract
+import requests
 
 # Load environment variables from .env if present
 load_dotenv()
@@ -26,6 +27,10 @@ from utils import ollama_list_running_models
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY environment variable not set.")
+
+# Gemini API
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -91,6 +96,48 @@ async def perform_openai_ocr(img_b64: str) -> str:
         max_tokens=1024,
     )
     return response.choices[0].message.content or ""
+
+
+def _gemini_generate(parts: list[dict], model: str | None = None) -> str:
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY not set")
+    model_name = model or GEMINI_MODEL
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY,
+    }
+    payload = {"contents": [{"parts": parts}]}
+    resp = requests.post(url, headers=headers, json=payload, timeout=60)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Gemini API error: {resp.status_code} {resp.text}")
+    data = resp.json()
+    # Extract text from candidates
+    text_chunks: list[str] = []
+    try:
+        for cand in data.get("candidates", []) or []:
+            content = cand.get("content") or {}
+            for p in content.get("parts", []) or []:
+                t = p.get("text")
+                if t:
+                    text_chunks.append(t)
+    except Exception:
+        pass
+    return "\n".join(text_chunks).strip()
+
+
+async def perform_gemini_ocr(img_b64: str, model: str | None = None) -> str:
+    parts = [
+        {"text": "Extract all text from this image. Do not refuse. If no text is present, return an empty string."},
+        {"inlineData": {"mimeType": "image/png", "data": img_b64}},
+    ]
+    # Run blocking HTTP call in a thread to avoid blocking event loop
+    return await asyncio.to_thread(_gemini_generate, parts, model)
+
+
+async def perform_gemini_text(prompt: str, model: str | None = None) -> str:
+    parts = [{"text": prompt}]
+    return await asyncio.to_thread(_gemini_generate, parts, model)
 
 
 # Project endpoints
@@ -169,6 +216,23 @@ async def ocr_image(file: UploadFile = File(...), provider: str = None, model: s
             else:
                 extracted_text = text
                 final_provider_used = "ollama"
+        elif use_provider == "gemini":
+            gemini_model = model or GEMINI_MODEL
+            text = await perform_gemini_ocr(img_base64, model=gemini_model)
+            if is_refusal(text):
+                processed = preprocess_image_for_ocr(original_image)
+                processed_b64 = pil_image_to_base64_png(processed)
+                text_retry = await perform_gemini_ocr(processed_b64, model=gemini_model)
+                if is_refusal(text_retry):
+                    # Tesseract fallback
+                    extracted_text = pytesseract.image_to_string(processed)
+                    final_provider_used = "tesseract"
+                else:
+                    extracted_text = text_retry
+                    final_provider_used = f"gemini:{gemini_model}+preprocess"
+            else:
+                extracted_text = text
+                final_provider_used = f"gemini:{gemini_model}"
         else:
             # OpenAI primary
             text = await perform_openai_ocr(img_base64)
@@ -408,6 +472,11 @@ async def summarize_text(body: SummarizeRequest):
             prompt = prompt_header + text_to_summarize
             summary = ollama_generate(prompt, model=ollama_model)
             provider_used = f"ollama:{ollama_model}"
+        elif use_provider == "gemini":
+            gemini_model = body.model or GEMINI_MODEL
+            prompt = prompt_header + text_to_summarize
+            summary = await perform_gemini_text(prompt, model=gemini_model)
+            provider_used = f"gemini:{gemini_model}"
         else:
             # Adapt max tokens according to requested length
             max_tokens = {"short": 250, "medium": 400, "long": 800}[length]

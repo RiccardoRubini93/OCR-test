@@ -178,6 +178,7 @@ function Summarize({ projectId }) {
               style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, fontWeight: 600 }}
             >
               <option value="openai">OpenAI</option>
+              <option value="gemini">Gemini</option>
               <option value="ollama">Ollama</option>
             </select>
           </div>
