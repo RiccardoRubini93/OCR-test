@@ -1,0 +1,174 @@
+/* Design tokens */
+:root {
+  --bg: #0b0b0c;
+  --card: #111216;
+  --surface: #161820;
+  --border: #23252f;
+  --text: #ffffff;
+  --muted: #bfc9d9;
+  --accent-1: #a259ff;
+  --accent-2: #4f8cff;
+  --shadow: 0 8px 32px rgba(0,0,0,.35);
+}
+
+html, body, #root {
+  height: 100%;
+  background: radial-gradient(1200px 600px at 70% -10%, rgba(162,89,255,.12) 0%, transparent 60%),
+              radial-gradient(1000px 500px at -10% 10%, rgba(79,140,255,.10) 0%, transparent 60%),
+              var(--bg);
+}
+
+/******** Brand & hero ********/
+.brand {
+  font-weight: 800;
+  letter-spacing: .3px;
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero {
+  text-align: center;
+  margin-top: 8px;
+  margin-bottom: 20px;
+}
+.hero h1 {
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.05;
+  margin: 0 0 8px 0;
+}
+.hero p {
+  color: var(--muted);
+  font-size: clamp(16px, 2.2vw, 20px);
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/******** Containers ********/
+.glass-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)) , var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.section {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px clamp(16px, 4vw, 48px);
+}
+
+/******** Stepper ********/
+.stepper { display: flex; justify-content: center; gap: 22px; margin: 14px 0 26px; color: var(--muted); }
+.step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+}
+.step .index { width: 24px; height: 24px; display:flex; align-items:center; justify-content:center; border-radius: 50%;
+  background: linear-gradient(90deg,var(--accent-1),var(--accent-2)); color: #fff; font-weight: 700; font-size: 13px; }
+.step .label { font-weight: 600; font-size: 14px; color: var(--muted); }
+
+/******** Dropzone ********/
+.dropzone { cursor: pointer; user-select:none; }
+.dropzone .inner {
+  min-height: 140px; display:flex; align-items:center; justify-content:center; text-align:center;
+  color: var(--muted); font-weight: 600; font-size: clamp(16px, 2.2vw, 20px);
+  background: var(--surface);
+  border: 2px dashed var(--accent-2);
+  border-radius: 16px;
+  transition: border-color .2s, background .2s, color .2s, transform .15s ease-out;
+}
+.dropzone.active .inner { border-color: var(--accent-1); background: rgba(162,89,255,.10); color: var(--accent-1); }
+.dropzone .hint { color: var(--muted); font-size: 13px; margin-top: 8px; opacity: .8; }
+
+/******** Buttons ********/
+.btn-gradient {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  border: none; color: #fff; font-weight: 800; letter-spacing: .3px;
+  padding: 14px 28px; border-radius: 12px; box-shadow: 0 6px 18px rgba(162,89,255,.20);
+}
+.btn-gradient:disabled { opacity: .65; }
+
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 10px 14px; border-radius: 10px; font-weight: 600;
+}
+
+.small-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+  background: #0f1117; border: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 600;
+}
+
+.pre {
+  background: #191b24; border: 1px solid var(--border); border-radius: 14px; padding: 18px; color: var(--text);
+  white-space: pre-wrap; font-size: 16px; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+
+.footer { text-align:center; color: var(--muted); font-size: 14px; padding: 24px 0 40px; opacity: .9; }
+
+/* Utilities */
+.maxw-600 { max-width: 600px; }
+.maxw-900 { max-width: 900px; }
+.center { margin-left: auto; margin-right: auto; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.mb-24 { margin-bottom: 24px; }
+
+/* Animation for gradient text shine */
+@keyframes sheen {
+  0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}
+}
+.sheen {
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2), var(--accent-1));
+  background-size: 200% 200%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: sheen 8s ease infinite;
+} 
+
+/* Light theme overrides */
+body.theme-light {
+  --bg: #f7f9fc;
+  --card: #ffffff;
+  --surface: #ffffff;
+  --border: #e6e9f2;
+  --text: #0b0c0f;
+  --muted: #4b5565;
+}
+body.theme-light html, body.theme-light #root {}
+body.theme-light {
+  background: radial-gradient(1200px 600px at 70% -10%, rgba(162,89,255,.10) 0%, transparent 60%),
+              radial-gradient(1000px 500px at -10% 10%, rgba(79,140,255,.08) 0%, transparent 60%),
+              var(--bg);
+}
+
+/* Skeleton loader */
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(255,255,255,.06) 25%, rgba(255,255,255,.16) 37%, rgba(255,255,255,.06) 63%), var(--surface);
+  background-size: 400% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  border: 1px solid var(--border);
+}
+body.theme-light .skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,.04) 25%, rgba(0,0,0,.08) 37%, rgba(0,0,0,.04) 63%), var(--surface);
+}
+
+/* Split layout for image vs text */
+.split { display: grid; gap: 16px; }
+@media (min-width: 992px) {
+  .split { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+.image-frame {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.image-frame img { max-width: 100%; max-height: 420px; border-radius: 12px; } 
