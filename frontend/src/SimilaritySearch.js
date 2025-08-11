@@ -9,7 +9,7 @@ const accentText = {
   fontWeight: 700,
 };
 
-function SimilaritySearch() {
+function SimilaritySearch({ projectId }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ function SimilaritySearch() {
       const res = await fetch(apiUrl('/texts/similarity'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, project_id: projectId ? Number(projectId) : undefined }),
       });
       const data = await res.json();
       setResults(data);

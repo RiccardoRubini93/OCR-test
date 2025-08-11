@@ -9,7 +9,7 @@ const accentText = {
   fontWeight: 700,
 };
 
-function SavedTexts() {
+function SavedTexts({ projectId }) {
   const [texts, setTexts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,7 +17,8 @@ function SavedTexts() {
   useEffect(() => {
     const fetchTexts = async () => {
       try {
-        const res = await fetch(apiUrl('/texts/'));
+        const url = projectId ? `${apiUrl('/texts/')}?project_id=${encodeURIComponent(projectId)}` : apiUrl('/texts/');
+        const res = await fetch(url);
         const data = await res.json();
         setTexts(data);
       } catch (err) {
@@ -26,7 +27,7 @@ function SavedTexts() {
       setLoading(false);
     };
     fetchTexts();
-  }, []);
+  }, [projectId]);
 
   return (
     <div className="main-responsive-box" style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 5vw' }}>

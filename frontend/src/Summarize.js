@@ -10,12 +10,13 @@ const accentText = {
   fontWeight: 700,
 };
 
-function Summarize() {
+function Summarize({ projectId }) {
   const [texts, setTexts] = useState([]);
   const [loadingTexts, setLoadingTexts] = useState(true);
   const [error, setError] = useState('');
 
   const [selectedId, setSelectedId] = useState('');
+  const [summarizeAll, setSummarizeAll] = useState(false);
 
   const [provider, setProvider] = useState('openai');
   const [ollamaModels, setOllamaModels] = useState([]);
@@ -45,11 +46,12 @@ function Summarize() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     const meta = [
-      `Text ID: ${selectedId || '-'}`,
+      `Text ID: ${summarizeAll ? 'ALL' : (selectedId || '-')}`,
       `Provider: ${provider}${provider === 'ollama' ? ` (${ollamaModel})` : ''}`,
       `Length: ${summaryLength}`,
       `Format: ${summaryFormat}`,
       instructions ? `Instructions: ${instructions}` : null,
+      projectId ? `Project: ${projectId}` : 'Project: All',
     ].filter(Boolean).join('  |  ');
     const metaLines = doc.splitTextToSize(meta, 540);
     metaLines.forEach(line => {
@@ -78,14 +80,15 @@ function Summarize() {
       cursorY += 16;
     });
 
-    const filenameBase = selectedId ? `summary_${selectedId}` : 'summary';
+    const filenameBase = summarizeAll ? `summary_all${projectId ? `_project_${projectId}` : ''}` : (selectedId ? `summary_${selectedId}` : 'summary');
     doc.save(`${filenameBase}.pdf`);
   };
 
   useEffect(() => {
     const fetchTexts = async () => {
       try {
-        const res = await fetch(apiUrl('/texts/'));
+        const url = projectId ? `${apiUrl('/texts/')}?project_id=${encodeURIComponent(projectId)}` : apiUrl('/texts/');
+        const res = await fetch(url);
         const data = await res.json();
         setTexts(data);
       } catch (err) {
@@ -94,7 +97,7 @@ function Summarize() {
       setLoadingTexts(false);
     };
     fetchTexts();
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     if (provider === 'ollama') {
@@ -124,8 +127,8 @@ function Summarize() {
     setSummary('');
     setLoading(true);
 
-    if (!selectedId) {
-      setError('Please select a saved text to summarize');
+    if (!summarizeAll && !selectedId) {
+      setError('Please select a saved text to summarize or toggle "Summarize all"');
       setLoading(false);
       return;
     }
@@ -133,7 +136,9 @@ function Summarize() {
     const payload = {
       provider,
       model: provider === 'ollama' ? ollamaModel : undefined,
-      text_id: Number(selectedId),
+      text_id: summarizeAll ? undefined : Number(selectedId),
+      summarize_all: summarizeAll,
+      project_id: projectId ? Number(projectId) : undefined,
       summary_length: summaryLength,
       format: summaryFormat,
       instructions: instructions.trim() ? instructions.trim() : undefined,
@@ -161,7 +166,7 @@ function Summarize() {
     <div className="main-responsive-box" style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 5vw' }}>
       <h2 style={{ fontSize: 38, marginBottom: 24, ...accentText }}>Summarize Saved Text</h2>
 
-      <form onSubmit={handleSummarize} className="d-flex flex-column gap-3" style={{ maxWidth: 900 }}>
+      <form onSubmit={handleSummarize} className="d-flex flex-column gap-3" style={{ maxWidth: 900, width: '100%' }}>
         <div className="row g-2 align-items-center">
           <div className="col-12 col-md-6">
             <label htmlFor="provider-select" className="form-label" style={{ color: '#fff', fontWeight: 600 }}>LLM Provider</label>
@@ -205,13 +210,20 @@ function Summarize() {
 
         <div className="row g-2 align-items-start">
           <div className="col-12 col-md-6">
-            <label htmlFor="saved-select" className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Saved Text</label>
+            <div className="d-flex align-items-center justify-content-between">
+              <label htmlFor="saved-select" className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Saved Text</label>
+              <div className="form-check form-switch" style={{ color: '#bfc9d9', fontWeight: 600 }}>
+                <input className="form-check-input" type="checkbox" id="summarize-all-switch" checked={summarizeAll} onChange={e => setSummarizeAll(e.target.checked)} />
+                <label className="form-check-label" htmlFor="summarize-all-switch">Summarize all in current project</label>
+              </div>
+            </div>
             <select
               id="saved-select"
               value={selectedId}
               onChange={e => setSelectedId(e.target.value)}
               className="form-select bg-dark text-white"
               style={{ padding: '10px 18px', borderRadius: 8, border: '1.5px solid #4f8cff', fontSize: 17, fontWeight: 600 }}
+              disabled={summarizeAll}
             >
               <option value="">— Select a saved text —</option>
               {texts.map(t => (
@@ -259,7 +271,9 @@ function Summarize() {
           <div className="col-12 col-md-6">
             <label className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Preview</label>
             <div style={{ background: '#191919', padding: 16, borderRadius: 12, border: '1.5px solid #232323', minHeight: 120, color: '#bfc9d9', fontSize: 15 }}>
-              {selectedText ? (
+              {summarizeAll ? (
+                <span>All texts in {projectId ? `project ${projectId}` : 'the entire database'} will be summarized.</span>
+              ) : selectedText ? (
                 <pre style={{ whiteSpace: 'pre-wrap', margin: 0, color: '#fff' }}>{selectedText.text}</pre>
               ) : (
                 <span>Select a saved text to preview it here.</span>
@@ -280,8 +294,8 @@ function Summarize() {
         </div>
 
         <div>
-          <button type="submit" className="btn btn-primary" disabled={loading || !selectedId} style={{ borderRadius: 12, padding: '14px 36px', fontWeight: 700, fontSize: 18 }}>
-            {loading ? 'Summarizing...' : 'Summarize'}
+          <button type="submit" className="btn btn-primary" disabled={loading || (!summarizeAll && !selectedId)} style={{ borderRadius: 12, padding: '14px 36px', fontWeight: 700, fontSize: 18 }}>
+            {loading ? 'Summarizing...' : (summarizeAll ? 'Summarize All' : 'Summarize')}
           </button>
           {summary && (
             <button type="button" onClick={handleSavePdf} className="btn btn-outline-light ms-2" style={{ borderRadius: 12, padding: '14px 24px', fontWeight: 700, fontSize: 18 }}>

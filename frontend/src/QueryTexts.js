@@ -9,7 +9,7 @@ const accentText = {
   fontWeight: 700,
 };
 
-function QueryTexts() {
+function QueryTexts({ projectId }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -21,7 +21,10 @@ function QueryTexts() {
     setError('');
     setResults([]);
     try {
-      const res = await fetch(`${apiUrl('/texts/search')}?q=${encodeURIComponent(query)}`);
+      const url = projectId
+        ? `${apiUrl('/texts/search')}?q=${encodeURIComponent(query)}&project_id=${encodeURIComponent(projectId)}`
+        : `${apiUrl('/texts/search')}?q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
       const data = await res.json();
       setResults(data);
     } catch (err) {

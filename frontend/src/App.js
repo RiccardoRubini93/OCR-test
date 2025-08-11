@@ -44,6 +44,51 @@ function App() {
   const [ollamaOnlyRunning, setOllamaOnlyRunning] = useState(false);
   const [ollamaModelsRefresh, setOllamaModelsRefresh] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [currentProjectId, setCurrentProjectId] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [projectError, setProjectError] = useState('');
+
+  useEffect(() => {
+    // Load projects on app start
+    fetch(apiUrl('/projects/'))
+      .then(res => res.json())
+      .then(data => {
+        setProjects(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0) {
+          setCurrentProjectId(String(data[0].id));
+        }
+      })
+      .catch(() => setProjects([]));
+  }, []);
+
+  const handleCreateProject = async () => {
+    setProjectError('');
+    const name = newProjectName.trim();
+    if (!name) {
+      setProjectError('Project name required');
+      return;
+    }
+    try {
+      const res = await fetch(apiUrl('/projects/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description: newProjectDesc.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProjectError(data.detail || data.error || 'Failed to create project');
+        return;
+      }
+      setProjects(prev => [data, ...prev]);
+      setCurrentProjectId(String(data.id));
+      setNewProjectName('');
+      setNewProjectDesc('');
+    } catch (e) {
+      setProjectError('Network error creating project');
+    }
+  };
 
   useEffect(() => {
     if (provider === 'ollama') {
@@ -86,6 +131,9 @@ function App() {
     if (provider === 'ollama' && ollamaModel) {
       url += `&model=${encodeURIComponent(ollamaModel)}`;
     }
+    if (currentProjectId) {
+      url += `&project_id=${encodeURIComponent(currentProjectId)}`;
+    }
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -123,20 +171,64 @@ function App() {
     }
   };
 
+  const handleClearFile = () => {
+    setFile(null);
+    setPreview(null);
+    setText('');
+    setError('');
+    const input = document.getElementById('file-upload');
+    if (input) input.value = '';
+  };
+
   // Replace nav and mainBox with Bootstrap classes and add a style tag for mobile tweaks
 
   const nav = (
     <nav className="navbar navbar-expand-lg navbar-dark bg-black sticky-top mb-4" style={{ borderBottom: '1px solid #222', minHeight: 64, zIndex: 10 }}>
       <div className="container-fluid justify-content-center">
-        <div className="d-flex flex-wrap gap-2 gap-md-4">
+        <div className="d-flex flex-wrap gap-2 gap-md-4 align-items-center">
           <button onClick={() => setPage('ocr')} className={`btn ${page === 'ocr' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'ocr')}>OCR Image</button>
           <button onClick={() => setPage('saved')} className={`btn ${page === 'saved' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'saved')}>Saved Texts</button>
           <button onClick={() => setPage('query')} className={`btn ${page === 'query' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'query')}>Query Texts</button>
           <button onClick={() => setPage('similarity')} className={`btn ${page === 'similarity' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'similarity')}>Similarity Search</button>
           <button onClick={() => setPage('stats')} className={`btn ${page === 'stats' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'stats')}>Stats & Query</button>
           <button onClick={() => setPage('summarize')} className={`btn ${page === 'summarize' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'summarize')}>Summarize</button>
+          <div className="vr d-none d-md-block" style={{ height: 28, background: '#333' }} />
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <label className="text-light me-1" style={{ fontWeight: 600 }}>Project:</label>
+            <select
+              value={currentProjectId}
+              onChange={e => setCurrentProjectId(e.target.value)}
+              className="form-select form-select-sm bg-dark text-white"
+              style={{ border: '1px solid #333', minWidth: 160 }}
+            >
+              <option value="">— None —</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="New project name"
+              value={newProjectName}
+              onChange={e => setNewProjectName(e.target.value)}
+              className="form-control form-control-sm bg-dark text-white"
+              style={{ border: '1px solid #333', minWidth: 160 }}
+            />
+            <input
+              type="text"
+              placeholder="Description (opt)"
+              value={newProjectDesc}
+              onChange={e => setNewProjectDesc(e.target.value)}
+              className="form-control form-control-sm bg-dark text-white"
+              style={{ border: '1px solid #333', minWidth: 200 }}
+            />
+            <button type="button" className="btn btn-sm btn-outline-light" onClick={handleCreateProject}>Create</button>
+          </div>
         </div>
       </div>
+      {projectError && (
+        <div className="container-fluid" style={{ color: '#e63946', fontSize: 12, paddingTop: 6 }}>{projectError}</div>
+      )}
     </nav>
   );
 
@@ -177,7 +269,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <SavedTexts />
+          <SavedTexts projectId={currentProjectId} />
         </div>
       </>
     );
@@ -188,7 +280,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <QueryTexts />
+          <QueryTexts projectId={currentProjectId} />
         </div>
       </>
     );
@@ -199,7 +291,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <SimilaritySearch />
+          <SimilaritySearch projectId={currentProjectId} />
         </div>
       </>
     );
@@ -210,7 +302,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <StatsAndQuery />
+          <StatsAndQuery projectId={currentProjectId} />
         </div>
       </>
     );
@@ -221,7 +313,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <Summarize />
+          <Summarize projectId={currentProjectId} />
         </div>
       </>
     );
@@ -262,6 +354,16 @@ function App() {
           onClick={() => document.getElementById('file-upload').click()}
         >
           {file ? file.name : dragActive ? 'Drop your image here...' : 'Tap to take a photo or choose an image (or drag & drop)'}
+          {file && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); handleClearFile(); }}
+              className="btn btn-sm btn-outline-light"
+              style={{ position: 'absolute', top: 8, right: 8, borderRadius: 8, padding: '6px 10px' }}
+            >
+              Remove
+            </button>
+          )}
           <input
             id="file-upload"
             type="file"
