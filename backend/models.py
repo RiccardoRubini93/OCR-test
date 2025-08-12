@@ -12,6 +12,7 @@ class Project(Base):
 class HandwrittenText(Base):
     __tablename__ = "handwritten_texts"
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(256), nullable=True, index=True)  # User-defined name for the text
     filename = Column(String(256), nullable=True)
     text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

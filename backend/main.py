@@ -56,6 +56,13 @@ async def on_startup():
         await conn.execute(sa_text(
             "CREATE INDEX IF NOT EXISTS idx_handwritten_texts_project_id ON handwritten_texts(project_id)"
         ))
+        # Ensure the name column exists even if table already created previously
+        await conn.execute(sa_text(
+            "ALTER TABLE handwritten_texts ADD COLUMN IF NOT EXISTS name varchar(256)"
+        ))
+        await conn.execute(sa_text(
+            "CREATE INDEX IF NOT EXISTS idx_handwritten_texts_name ON handwritten_texts(name)"
+        ))
 
 DEFAULT_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
@@ -178,7 +185,7 @@ async def get_project(project_id: int):
 
 
 @app.post("/ocr/")
-async def ocr_image(file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None):
+async def ocr_image(file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None, name: str = None):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
     try:
@@ -269,11 +276,17 @@ async def ocr_image(file: UploadFile = File(...), provider: str = None, model: s
 
         # Save to DB
         async with SessionLocal() as session:
-            db_obj = HandwrittenText(filename=file.filename, text=extracted_text, embedding=embedding, project_id=project_id)
+            db_obj = HandwrittenText(
+                name=name, 
+                filename=file.filename, 
+                text=extracted_text, 
+                embedding=embedding, 
+                project_id=project_id
+            )
             session.add(db_obj)
             await session.commit()
 
-        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id}
+        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id, "name": name}
     except Exception as e:
         print("Exception in /ocr/:", e)
         traceback.print_exc()
@@ -288,7 +301,7 @@ async def get_texts(project_id: int | None = None):
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
 
 @app.get("/texts/search")
@@ -300,8 +313,104 @@ async def search_texts(q: str = Query(..., min_length=1), project_id: int | None
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
+
+@app.delete("/texts/{text_id}")
+async def delete_text(text_id: int):
+    async with SessionLocal() as session:
+        # Get the text to check if it exists
+        stmt = select(HandwrittenText).where(HandwrittenText.id == text_id)
+        result = await session.execute(stmt)
+        text = result.scalar_one_or_none()
+        
+        if not text:
+            raise HTTPException(status_code=404, detail="Text not found")
+        
+        # Delete the text
+        await session.delete(text)
+        await session.commit()
+        
+        return {"message": "Text deleted successfully", "deleted_id": text_id}
+
+@app.delete("/projects/{project_id}/content")
+async def clear_project_content(project_id: int):
+    async with SessionLocal() as session:
+        # Check if project exists
+        stmt = select(Project).where(Project.id == project_id)
+        result = await session.execute(stmt)
+        project = result.scalar_one_or_none()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Delete all texts in the project
+        stmt = select(HandwrittenText).where(HandwrittenText.project_id == project_id)
+        result = await session.execute(stmt)
+        texts = result.scalars().all()
+        
+        for text in texts:
+            await session.delete(text)
+        
+        await session.commit()
+        
+        return {"message": f"Cleared {len(texts)} texts from project '{project.name}'", "project_id": project_id, "deleted_count": len(texts)}
+
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: int):
+    async with SessionLocal() as session:
+        # Check if project exists
+        stmt = select(Project).where(Project.id == project_id)
+        result = await session.execute(stmt)
+        project = result.scalar_one_or_none()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Delete all texts in the project first
+        stmt = select(HandwrittenText).where(HandwrittenText.project_id == project_id)
+        result = await session.execute(stmt)
+        texts = result.scalars().all()
+        
+        for text in texts:
+            await session.delete(text)
+        
+        # Delete the project
+        await session.delete(project)
+        await session.commit()
+        
+        return {"message": f"Deleted project '{project.name}' and {len(texts)} associated texts", "deleted_project_id": project_id, "deleted_texts_count": len(texts)}
+
+class BulkDeleteRequest(BaseModel):
+    text_ids: list[int]
+
+@app.delete("/texts/bulk")
+async def bulk_delete_texts(request: BulkDeleteRequest):
+    async with SessionLocal() as session:
+        deleted_count = 0
+        failed_ids = []
+        
+        for text_id in request.text_ids:
+            try:
+                stmt = select(HandwrittenText).where(HandwrittenText.id == text_id)
+                result = await session.execute(stmt)
+                text = result.scalar_one_or_none()
+                
+                if text:
+                    await session.delete(text)
+                    deleted_count += 1
+                else:
+                    failed_ids.append(text_id)
+            except Exception as e:
+                failed_ids.append(text_id)
+        
+        await session.commit()
+        
+        return {
+            "message": f"Deleted {deleted_count} texts successfully",
+            "deleted_count": deleted_count,
+            "failed_ids": failed_ids
+        }
 
 class SimilarityQuery(BaseModel):
     query: str
@@ -334,7 +443,7 @@ async def similarity_search(body: SimilarityQuery):
                 continue
         scored.sort(reverse=True, key=lambda x: x[0])
         top = [
-            {"id": i.id, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "score": sim, "project_id": i.project_id}
+            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "score": sim, "project_id": i.project_id}
             for sim, i in scored[:10]
         ]
         return top 

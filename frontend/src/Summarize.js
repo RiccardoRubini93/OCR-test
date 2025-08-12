@@ -47,6 +47,7 @@ function Summarize({ projectId }) {
     doc.setFontSize(11);
     const meta = [
       `Text ID: ${summarizeAll ? 'ALL' : (selectedId || '-')}`,
+      selectedText?.name ? `Text Name: ${selectedText.name}` : null,
       `Provider: ${provider}${provider === 'ollama' ? ` (${ollamaModel})` : ''}`,
       `Length: ${summaryLength}`,
       `Format: ${summaryFormat}`,
@@ -80,7 +81,7 @@ function Summarize({ projectId }) {
       cursorY += 16;
     });
 
-    const filenameBase = summarizeAll ? `summary_all${projectId ? `_project_${projectId}` : ''}` : (selectedId ? `summary_${selectedId}` : 'summary');
+    const filenameBase = summarizeAll ? `summary_all${projectId ? `_project_${projectId}` : ''}` : (selectedId ? `summary_${selectedText?.name ? selectedText.name.replace(/[^a-zA-Z0-9]/g, '_') : selectedId}` : 'summary');
     doc.save(`${filenameBase}.pdf`);
   };
 
@@ -228,7 +229,9 @@ function Summarize({ projectId }) {
             >
               <option value="">— Select a saved text —</option>
               {texts.map(t => (
-                <option key={t.id} value={t.id}>{`#${t.id} ${t.filename ? `(${t.filename})` : ''}`}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name ? `${t.name}` : `#${t.id}`} {t.filename ? `(${t.filename})` : ''}
+                </option>
               ))}
             </select>
             <div className="row g-2 mt-2">
@@ -275,7 +278,14 @@ function Summarize({ projectId }) {
               {summarizeAll ? (
                 <span>All texts in {projectId ? `project ${projectId}` : 'the entire database'} will be summarized.</span>
               ) : selectedText ? (
-                <pre style={{ whiteSpace: 'pre-wrap', margin: 0, color: '#fff' }}>{selectedText.text}</pre>
+                <div>
+                  {selectedText.name && (
+                    <div style={{ marginBottom: 12, padding: '8px 12px', background: 'linear-gradient(135deg, rgba(79,140,255,0.1), rgba(162,89,255,0.1))', borderRadius: 8, border: '1px solid rgba(79,140,255,0.2)' }}>
+                      <strong style={{ color: '#4f8cff' }}>{selectedText.name}</strong>
+                    </div>
+                  )}
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0, color: '#fff' }}>{selectedText.text}</pre>
+                </div>
               ) : (
                 <span>Select a saved text to preview it here.</span>
               )}

@@ -34,6 +34,7 @@ const accentText = {
 function App() {
   const [file, setFile] = useState(null);
   const [text, setText] = useState('');
+  const [textName, setTextName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
@@ -51,6 +52,90 @@ function App() {
   const [projectError, setProjectError] = useState('');
   const [copied, setCopied] = useState(false);
   const [theme, setTheme] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem('theme') || 'dark') : 'dark'));
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showProjectManageModal, setShowProjectManageModal] = useState(false);
+  const [projectActionLoading, setProjectActionLoading] = useState(false);
+
+  // Debug function to check modal state
+  const handleOpenModal = () => {
+    console.log('Opening modal, current state:', showProjectModal);
+    setShowProjectModal(true);
+    console.log('Modal state after set:', true);
+  };
+
+  const handleCloseModal = () => {
+    console.log('Closing modal');
+    setShowProjectModal(false);
+  };
+
+  const handleClearProject = async () => {
+    if (!currentProjectId) return;
+    
+    if (!confirm('Are you sure you want to clear all content from this project? This action cannot be undone.')) {
+      return;
+    }
+
+    setProjectActionLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/projects/${currentProjectId}/content`), {
+        method: 'DELETE',
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        // Refresh projects and clear current project
+        const projectsRes = await fetch(apiUrl('/projects/'));
+        const projectsData = await projectsRes.json();
+        setProjects(Array.isArray(projectsData) ? projectsData : []);
+        setCurrentProjectId('');
+        setShowProjectManageModal(false);
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'Failed to clear project content');
+      }
+    } catch (err) {
+      alert('Network error while clearing project content');
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!currentProjectId) return;
+    
+    const currentProject = projects.find(p => String(p.id) === currentProjectId);
+    if (!currentProject) return;
+    
+    if (!confirm(`Are you sure you want to delete the project "${currentProject.name}" and ALL its content? This action cannot be undone.`)) {
+      return;
+    }
+
+    setProjectActionLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/projects/${currentProjectId}`), {
+        method: 'DELETE',
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message);
+        // Refresh projects and clear current project
+        const projectsRes = await fetch(apiUrl('/projects/'));
+        const projectsData = await projectsRes.json();
+        setProjects(Array.isArray(projectsData) ? projectsData : []);
+        setCurrentProjectId('');
+        setShowProjectManageModal(false);
+      } else {
+        const data = await res.json();
+        alert(data.detail || 'Failed to delete project');
+      }
+    } catch (err) {
+      alert('Network error while deleting project');
+    } finally {
+      setProjectActionLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Load projects on app start
@@ -83,6 +168,31 @@ function App() {
     if (typeof window !== 'undefined') localStorage.setItem('ocr_ollama_model', ollamaModel);
   }, [ollamaModel]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    console.log('useEffect triggered, showProjectModal:', showProjectModal);
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && showProjectModal) {
+        console.log('Escape key pressed, closing modal');
+        setShowProjectModal(false);
+      }
+    };
+
+    if (showProjectModal) {
+      console.log('Adding event listeners for modal');
+      document.addEventListener('keydown', handleEscape);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      console.log('Cleaning up event listeners');
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [showProjectModal]);
+
   const handleCreateProject = async () => {
     setProjectError('');
     const name = newProjectName.trim();
@@ -105,6 +215,12 @@ function App() {
       setCurrentProjectId(String(data.id));
       setNewProjectName('');
       setNewProjectDesc('');
+      
+      // Close the modal
+      setShowProjectModal(false);
+      
+      // Show success feedback
+      setProjectError(''); // Clear any previous errors
     } catch (e) {
       setProjectError('Network error creating project');
     }
@@ -157,6 +273,9 @@ function App() {
     if (currentProjectId) {
       url += `&project_id=${encodeURIComponent(currentProjectId)}`;
     }
+    if (textName.trim()) {
+      url += `&name=${encodeURIComponent(textName.trim())}`;
+    }
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -198,6 +317,7 @@ function App() {
     setFile(null);
     setPreview(null);
     setText('');
+    setTextName('');
     setError('');
     const input = document.getElementById('file-upload');
     if (input) input.value = '';
@@ -227,38 +347,65 @@ function App() {
       {projectError && (
         <div className="container-fluid" style={{ color: '#e63946', fontSize: 12, paddingTop: 6 }}>{projectError}</div>
       )}
-      <div className="container-fluid" style={{ borderTop: '1px solid #222', paddingTop: 10, paddingBottom: 10 }}>
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <label className="text-light me-1" style={{ fontWeight: 600 }}>Project:</label>
-          <select
-            value={currentProjectId}
-            onChange={e => setCurrentProjectId(e.target.value)}
-            className="form-select form-select-sm bg-dark text-white"
-            style={{ border: '1px solid #333', minWidth: 160 }}
-          >
-            <option value="">— None —</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="New project name"
-            value={newProjectName}
-            onChange={e => setNewProjectName(e.target.value)}
-            className="form-control form-control-sm bg-dark text-white"
-            style={{ border: '1px solid #333', minWidth: 160 }}
-          />
-          <input
-            type="text"
-            placeholder="Description (opt)"
-            value={newProjectDesc}
-            onChange={e => setNewProjectDesc(e.target.value)}
-            className="form-control form-control-sm bg-dark text-white"
-            style={{ border: '1px solid #333', minWidth: 200 }}
-          />
-          <button type="button" className="btn btn-sm btn-outline-light" onClick={handleCreateProject}>Create</button>
+      
+      {/* Improved Project Management Section */}
+      <div className="container-fluid" style={{ borderTop: '1px solid #222', paddingTop: 16, paddingBottom: 16 }}>
+        <div className="row align-items-center">
+          <div className="col-12 col-md-4">
+            <div className="d-flex align-items-center gap-2">
+              <i className="bi bi-folder2-open text-primary" style={{ fontSize: 18 }}></i>
+              <span className="text-light fw-semibold">Current Project:</span>
+            </div>
+          </div>
+          <div className="col-12 col-md-8">
+            <div className="d-flex align-items-center gap-3 flex-wrap">
+              <select
+                value={currentProjectId}
+                onChange={e => setCurrentProjectId(e.target.value)}
+                className="form-select form-select-sm bg-dark text-white"
+                style={{ border: '1px solid #333', minWidth: 180 }}
+              >
+                <option value="">— No Project Selected —</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.description ? `(${p.description})` : ''}
+                  </option>
+                ))}
+              </select>
+              
+              <div className="vr text-muted" style={{ height: 24 }}></div>
+              
+              <div className="d-flex align-items-center gap-2">
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-primary" 
+                  onClick={handleOpenModal}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  <i className="bi bi-plus-circle me-1"></i>
+                  New Project
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+        
+        {/* Project Info Display */}
+        {currentProjectId && projects.find(p => String(p.id) === currentProjectId) && (
+          <div className="row mt-2">
+            <div className="col-12">
+              <div className="d-flex align-items-center gap-2 text-muted" style={{ fontSize: 13 }}>
+                <i className="bi bi-info-circle"></i>
+                <span>
+                  Working in: <strong className="text-light">{projects.find(p => String(p.id) === currentProjectId)?.name}</strong>
+                  {projects.find(p => String(p.id) === currentProjectId)?.description && (
+                    <span className="ms-2">— {projects.find(p => String(p.id) === currentProjectId)?.description}</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </nav>
   );
@@ -353,6 +500,90 @@ function App() {
   return (
     <>
       {nav}
+      
+      {/* Project Management Help Section */}
+      {!currentProjectId && (
+        <div className="container mb-4">
+          <div className="alert alert-info bg-dark border-primary" style={{ borderRadius: 12 }}>
+            <div className="d-flex align-items-start gap-3">
+              <i className="bi bi-lightbulb text-primary" style={{ fontSize: 20, marginTop: 2 }}></i>
+              <div>
+                <h6 className="alert-heading text-primary mb-2">Why Use Projects?</h6>
+                <p className="mb-2 text-muted" style={{ fontSize: 14 }}>
+                  Projects help you organize your OCR work by grouping related documents together. 
+                  Create a project for different types of work like:
+                </p>
+                <ul className="mb-0 text-muted" style={{ fontSize: 14 }}>
+                  <li>📄 <strong>Receipt Analysis:</strong> Process expense receipts and invoices</li>
+                  <li>📚 <strong>Document Processing:</strong> Extract text from contracts, forms, or reports</li>
+                  <li>📝 <strong>Handwriting Recognition:</strong> Convert handwritten notes to digital text</li>
+                  <li>🔍 <strong>Research Projects:</strong> Organize research materials and findings</li>
+                </ul>
+                <div className="mt-3">
+                  <button 
+                    type="button" 
+                    className="btn btn-sm btn-primary" 
+                    onClick={handleOpenModal}
+                  >
+                    <i className="bi bi-plus-circle me-1"></i>
+                    Create Your First Project
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Current Project Display */}
+      {currentProjectId && projects.find(p => String(p.id) === currentProjectId) && (
+        <div className="container mb-4">
+          <div className="alert alert-success bg-dark border-success" style={{ borderRadius: 12 }}>
+            <div className="d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <i className="bi bi-folder2-open text-success" style={{ fontSize: 20 }}></i>
+                <div>
+                  <h6 className="alert-heading text-success mb-1">
+                    Working in: <strong>{projects.find(p => String(p.id) === currentProjectId)?.name}</strong>
+                  </h6>
+                  {projects.find(p => String(p.id) === currentProjectId)?.description && (
+                    <p className="mb-0 text-muted" style={{ fontSize: 14 }}>
+                      {projects.find(p => String(p.id) === currentProjectId)?.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="d-flex gap-2">
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-success" 
+                  onClick={handleOpenModal}
+                >
+                  <i className="bi bi-plus-circle me-1"></i>
+                  New Project
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-warning" 
+                  onClick={() => setShowProjectManageModal(true)}
+                >
+                  <i className="bi bi-gear me-1"></i>
+                  Manage Project
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-sm btn-outline-secondary" 
+                  onClick={() => setCurrentProjectId('')}
+                >
+                  <i className="bi bi-x-circle me-1"></i>
+                  Clear Project
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="section glass-card main-responsive-box">
         <div className="hero">
           <div className="small-pill center mb-8"><i className="bi bi-stars"/> Smart OCR with AI</div>
@@ -431,6 +662,25 @@ function App() {
                 )}
               </div>
             </form>
+            
+            {/* Text Name Input */}
+            <div className="mt-3">
+              <label htmlFor="textName" className="text-name-label">
+                <i className="bi bi-tag me-1"></i>
+                Text Name (Optional)
+              </label>
+              <input
+                type="text"
+                id="textName"
+                className="text-name-input"
+                placeholder="e.g., Receipt from Coffee Shop, Meeting Notes, Contract Page 1"
+                value={textName}
+                onChange={e => setTextName(e.target.value)}
+              />
+              <div className="text-name-help">
+                Give your extracted text a descriptive name to help organize and find it later
+              </div>
+            </div>
           </div>
 
           <div>
@@ -443,7 +693,14 @@ function App() {
             <div>
               <div className="d-flex align-items-center justify-content-between mb-8">
                 <h4 style={{ ...accentText, fontSize: 24, margin: 0 }}>Extracted Text</h4>
-                <span className="small-pill"><i className="bi bi-cpu"/> {provider === 'ollama' ? `Ollama (${ollamaModel})` : provider === 'gemini' ? 'Gemini' : 'OpenAI'}</span>
+                <div className="d-flex align-items-center gap-2">
+                  {currentProjectId && projects.find(p => String(p.id) === currentProjectId) && (
+                    <span className="small-pill text-success" style={{ background: 'rgba(40,167,69,0.1)', border: '1px solid rgba(40,167,69,0.3)' }}>
+                      <i className="bi bi-folder2"></i> {projects.find(p => String(p.id) === currentProjectId)?.name}
+                    </span>
+                  )}
+                  <span className="small-pill"><i className="bi bi-cpu"/> {provider === 'ollama' ? `Ollama (${ollamaModel})` : provider === 'gemini' ? 'Gemini' : 'OpenAI'}</span>
+                </div>
               </div>
               {loading ? (
                 <div className="pre skeleton" style={{ minHeight: 160 }} />
@@ -457,6 +714,235 @@ function App() {
         </div>
       </div>
       <footer className="footer">&copy; {new Date().getFullYear()} OCR AI Platform Demo</footer>
+      
+      {/* Project Creation Modal */}
+      {showProjectModal && (
+        <div 
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 1050,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={handleCloseModal}
+        >
+          <div 
+            className="modal-content bg-dark text-white"
+            style={{ 
+              border: '1px solid #333',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header border-secondary" style={{ borderBottom: '1px solid #333', padding: '16px 20px' }}>
+              <h5 className="modal-title" id="projectModalLabel">
+                <i className="bi bi-folder-plus text-primary me-2"></i>
+                Create New Project
+              </h5>
+              <button 
+                type="button" 
+                className="btn-close btn-close-white" 
+                onClick={handleCloseModal}
+                aria-label="Close"
+              ></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <div className="mb-3">
+                <label htmlFor="projectName" className="form-label fw-semibold">
+                  Project Name <span className="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  className="form-control bg-dark text-white border-secondary"
+                  id="projectName"
+                  placeholder="e.g., Receipt Analysis, Document Processing"
+                  value={newProjectName}
+                  onChange={e => setNewProjectName(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && handleCreateProject()}
+                />
+                <div className="form-text text-muted">
+                  Choose a descriptive name for your project
+                </div>
+              </div>
+              
+              <div className="mb-3">
+                <label htmlFor="projectDescription" className="form-label fw-semibold">
+                  Description <span className="text-muted">(Optional)</span>
+                </label>
+                <textarea
+                  className="form-control bg-dark text-white border-secondary"
+                  id="projectDescription"
+                  rows="3"
+                  placeholder="Describe what this project is for, what types of documents you'll be processing, etc."
+                  value={newProjectDesc}
+                  onChange={e => setNewProjectDesc(e.target.value)}
+                  onKeyPress={e => e.key === 'Enter' && !e.shiftKey && handleCreateProject()}
+                ></textarea>
+                <div className="form-text text-muted">
+                  Help organize your work by adding context about this project
+                </div>
+              </div>
+              
+              {projectError && (
+                <div className="alert alert-danger py-2" style={{ fontSize: 14 }}>
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  {projectError}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer border-secondary" style={{ borderTop: '1px solid #333', padding: '16px 20px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={handleCloseModal}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleCreateProject}
+                disabled={!newProjectName.trim()}
+              >
+                <i className="bi bi-check-circle me-2"></i>
+                Create Project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Project Management Modal */}
+      {showProjectManageModal && currentProjectId && projects.find(p => String(p.id) === currentProjectId) && (
+        <div 
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 1050,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setShowProjectManageModal(false)}
+        >
+          <div 
+            className="modal-content bg-dark text-white"
+            style={{ 
+              border: '1px solid #333',
+              borderRadius: '12px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header border-secondary" style={{ borderBottom: '1px solid #333', padding: '16px 20px' }}>
+              <h5 className="modal-title">
+                <i className="bi bi-gear text-warning me-2"></i>
+                Manage Project: {projects.find(p => String(p.id) === currentProjectId)?.name}
+              </h5>
+              <button 
+                type="button" 
+                className="btn-close btn-close-white" 
+                onClick={() => setShowProjectManageModal(false)}
+                aria-label="Close"
+              ></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <div className="alert alert-info bg-dark border-info" style={{ borderRadius: 8 }}>
+                <i className="bi bi-info-circle me-2"></i>
+                <strong>Current Project:</strong> {projects.find(p => String(p.id) === currentProjectId)?.name}
+                {projects.find(p => String(p.id) === currentProjectId)?.description && (
+                  <div className="mt-2">
+                    <strong>Description:</strong> {projects.find(p => String(p.id) === currentProjectId)?.description}
+                  </div>
+                )}
+              </div>
+              
+              <div className="row g-3">
+                <div className="col-12">
+                  <div className="card project-management-card border-warning">
+                    <div className="card-body">
+                      <h6 className="card-title text-warning">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        Clear Project Content
+                      </h6>
+                      <p className="card-text text-muted">
+                        This will remove all OCR texts from this project but keep the project itself.
+                        Useful when you want to start fresh with the same project.
+                      </p>
+                      <button 
+                        type="button" 
+                        className="btn btn-warning btn-sm"
+                        onClick={handleClearProject}
+                        disabled={projectActionLoading}
+                      >
+                        <i className="bi bi-eraser me-1"></i>
+                        {projectActionLoading ? 'Processing...' : 'Clear Project Content'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="col-12">
+                  <div className="card project-management-card border-danger">
+                    <div className="card-body">
+                      <h6 className="card-title text-danger">
+                        <i className="bi bi-trash me-2"></i>
+                        Delete Entire Project
+                      </h6>
+                      <p className="card-text text-muted">
+                        This will permanently delete the project and ALL its content.
+                        This action cannot be undone.
+                      </p>
+                      <button 
+                        type="button" 
+                        className="btn btn-danger btn-sm"
+                        onClick={handleDeleteProject}
+                        disabled={projectActionLoading}
+                      >
+                        <i className="bi bi-trash me-1"></i>
+                        {projectActionLoading ? 'Processing...' : 'Delete Project & All Content'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer border-secondary" style={{ borderTop: '1px solid #333', padding: '16px 20px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setShowProjectManageModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Debug Info - Remove this after fixing */}
+      <div style={{ position: 'fixed', bottom: 10, right: 10, background: 'rgba(0,0,0,0.8)', color: 'white', padding: '10px', borderRadius: '5px', fontSize: '12px', zIndex: 9999 }}>
+        Modal State: {showProjectModal ? 'OPEN' : 'CLOSED'}
+      </div>
     </>
   );
 }

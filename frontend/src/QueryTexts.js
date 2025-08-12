@@ -33,6 +33,27 @@ function QueryTexts({ projectId }) {
     setLoading(false);
   };
 
+  const handleDeleteText = async (textId) => {
+    if (!confirm('Are you sure you want to delete this text? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(apiUrl(`/texts/${textId}`), {
+        method: 'DELETE',
+      });
+      
+      if (res.ok) {
+        setResults(prev => prev.filter(t => t.id !== textId));
+      } else {
+        const data = await res.json();
+        setError(data.detail || 'Failed to delete text');
+      }
+    } catch (err) {
+      setError('Network error while deleting text');
+    }
+  };
+
   return (
     <div className="main-responsive-box" style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 5vw' }}>
       <h2 style={{ fontSize: 38, marginBottom: 32, ...accentText }}>Query OCR Texts</h2>
@@ -59,14 +80,38 @@ function QueryTexts({ projectId }) {
         <div className="d-flex flex-column gap-4">
           {results.map((item) => (
             <div key={item.id} className="mx-auto w-100" style={{ background: '#191919', borderRadius: 20, boxShadow: '0 2px 12px rgba(162,89,255,0.08)', padding: 32, color: '#fff', fontSize: 18, fontWeight: 500, maxWidth: 900, border: '1.5px solid #232323' }}>
-              {item.filename && (
-                <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
-                  <span style={{ fontWeight: 700, color: '#fff' }}>File:</span> {item.filename}
+              {/* Text Name - Display prominently */}
+              {item.name && (
+                <div style={{ marginBottom: 16, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(79,140,255,0.1), rgba(162,89,255,0.1))', borderRadius: 12, border: '1px solid rgba(79,140,255,0.2)' }}>
+                  <h4 style={{ margin: 0, color: '#4f8cff', fontWeight: 600, fontSize: 20 }}>
+                    <i className="bi bi-tag me-2"></i>
+                    {item.name}
+                  </h4>
                 </div>
               )}
-              <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
-                <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
+              
+              {/* Header with metadata and delete button */}
+              <div className="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                  {item.filename && (
+                    <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>File:</span> {item.filename}
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
+                    <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
+                  </div>
+                </div>
+                
+                <button
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={() => handleDeleteText(item.id)}
+                  title="Delete this text"
+                >
+                  <i className="bi bi-trash"></i>
+                </button>
               </div>
+              
               <pre style={{ background: '#232323', padding: 20, borderRadius: 12, fontSize: 17, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, margin: 0, boxShadow: '0 1px 4px rgba(162,89,255,0.05)' }}>{item.text}</pre>
             </div>
           ))}
