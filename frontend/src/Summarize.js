@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { apiUrl } from './api';
+import { apiUrl, extractError } from './api';
 import { jsPDF } from 'jspdf';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
@@ -155,7 +155,7 @@ function Summarize({ projectId }) {
       if (res.ok) {
         setSummary(data.summary);
       } else {
-        setError(data.error || 'Failed to summarize');
+            setError(extractError(data) || 'Failed to summarize');
       }
     } catch (err) {
       setError('Network error');

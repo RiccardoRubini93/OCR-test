@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiUrl } from './api';
+import { apiUrl, extractError } from './api';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
 const accentText = {
@@ -47,7 +47,7 @@ function QueryTexts({ projectId }) {
         setResults(prev => prev.filter(t => t.id !== textId));
       } else {
         const data = await res.json();
-        setError(data.detail || 'Failed to delete text');
+        setError(extractError(data) || 'Failed to delete text');
       }
     } catch (err) {
       setError('Network error while deleting text');

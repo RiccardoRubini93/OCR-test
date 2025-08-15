@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { apiUrl } from './api';
+import { apiUrl, extractError } from './api';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
 const accentText = {
@@ -27,7 +27,11 @@ function SimilaritySearch({ projectId }) {
         body: JSON.stringify({ query, project_id: projectId ? Number(projectId) : undefined }),
       });
       const data = await res.json();
-      setResults(data);
+          if (res.ok) {
+            setResults(data);
+          } else {
+            setError(extractError(data) || 'Failed to fetch similarity results');
+          }
     } catch (err) {
       setError('Failed to fetch similarity results');
     }

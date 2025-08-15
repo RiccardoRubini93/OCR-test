@@ -3,7 +3,7 @@ import SavedTexts from './SavedTexts';
 
 import StatsAndQuery from './StatsAndQuery';
 import Summarize from './Summarize';
-import { apiUrl } from './api';
+import { apiUrl, extractError } from './api';
 
 // Global style injection for demo
 const globalStyle = `
@@ -91,7 +91,7 @@ function App() {
         setShowProjectManageModal(false);
       } else {
         const data = await res.json();
-        alert(data.detail || 'Failed to clear project content');
+        alert(extractError(data) || 'Failed to clear project content');
       }
     } catch (err) {
       alert('Network error while clearing project content');
@@ -127,7 +127,7 @@ function App() {
         setShowProjectManageModal(false);
       } else {
         const data = await res.json();
-        alert(data.detail || 'Failed to delete project');
+        alert(extractError(data) || 'Failed to delete project');
       }
     } catch (err) {
       alert('Network error while deleting project');
@@ -207,7 +207,7 @@ function App() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setProjectError(data.detail || data.error || 'Failed to create project');
+    setProjectError(extractError(data) || 'Failed to create project');
         return;
       }
       setProjects(prev => [data, ...prev]);

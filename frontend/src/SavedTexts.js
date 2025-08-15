@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { apiUrl } from './api';
+import { apiUrl, extractError } from './api';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
 const accentText = {
@@ -108,7 +108,7 @@ function SavedTexts({ projectId }) {
         });
       } else {
         const data = await res.json();
-        setError(data.detail || 'Failed to delete text');
+        setError(extractError(data) || 'Failed to delete text');
       }
     } catch (err) {
       setError('Network error while deleting text');
@@ -135,7 +135,7 @@ function SavedTexts({ projectId }) {
         setSelectedTexts(new Set());
       } else {
         const data = await res.json();
-        setError(data.detail || 'Failed to delete texts');
+        setError(extractError(data) || 'Failed to delete texts');
       }
     } catch (err) {
       setError('Network error while deleting texts');
@@ -270,11 +270,11 @@ function SavedTexts({ projectId }) {
                                 <div key={item.id} className="col-12 col-sm-6 col-md-6">
                   <div
                     className="card h-100"
-                    onMouseEnter={() => { setHoveredId(item.id); if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover)').matches) setFullscreenId(item.id); }}
+                    onMouseEnter={() => { setHoveredId(item.id); }}
                     onMouseLeave={() => setHoveredId(null)}
                     onFocus={() => setHoveredId(item.id)}
                     onBlur={() => setHoveredId(null)}
-                    onClick={() => { if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover)').matches) return; setFullscreenId(item.id); }}
+                    onClick={() => { setFullscreenId(item.id); }}
                     tabIndex={0}
                     role="button"
                                     style={{

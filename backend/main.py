@@ -194,7 +194,7 @@ async def get_project(project_id: int):
 
 
 @app.post("/ocr/")
-async def ocr_image(file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None, name: str | None = None):
+async def ocr_image(request: Request, file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None, name: str | None = None):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
     try:
@@ -305,14 +305,15 @@ async def ocr_image(file: UploadFile = File(...), provider: str = None, model: s
             session.add(db_obj)
             await session.commit()
 
-        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id, "name": name, "saved_filename": saved_name}
+        image_url = f"{str(request.base_url).rstrip('/')}/uploads/{saved_name}"
+        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id, "name": name, "saved_filename": saved_name, "image_url": image_url}
     except Exception as e:
         print("Exception in /ocr/:", e)
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/texts/")
-async def get_texts(project_id: int | None = None):
+async def get_texts(request: Request, project_id: int | None = None):
     async with SessionLocal() as session:
         stmt = select(HandwrittenText).order_by(HandwrittenText.created_at.desc())
         if project_id is not None:
@@ -320,11 +321,11 @@ async def get_texts(project_id: int | None = None):
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"{str(request.base_url).rstrip('/')}/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
 
 @app.get("/texts/search")
-async def search_texts(q: str = Query(..., min_length=1), project_id: int | None = None):
+async def search_texts(request: Request, q: str = Query(..., min_length=1), project_id: int | None = None):
     async with SessionLocal() as session:
         stmt = select(HandwrittenText).where(HandwrittenText.text.ilike(f"%{q}%")).order_by(HandwrittenText.created_at.desc())
         if project_id is not None:
@@ -332,7 +333,7 @@ async def search_texts(q: str = Query(..., min_length=1), project_id: int | None
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"{str(request.base_url).rstrip('/')}/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
 
 @app.delete("/texts/{text_id}")
