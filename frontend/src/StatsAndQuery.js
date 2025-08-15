@@ -155,7 +155,7 @@ function StatsAndQuery({ projectId }) {
       });
       const data = await res.json();
       if (data.error) {
-        setQueryError(data.error);
+        setQueryError(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
       } else {
         setQueryResult(data);
       }
@@ -193,7 +193,7 @@ function StatsAndQuery({ projectId }) {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setQueryError(data.error || 'Query failed');
+        setQueryError(data.error ? (typeof data.error === 'string' ? data.error : JSON.stringify(data.error)) : 'Query failed');
       } else {
         setQueryResult(data);
       }

@@ -52,7 +52,7 @@ function SimilaritySearch({ projectId }) {
         setResults(prev => prev.filter(t => t.id !== textId));
       } else {
         const data = await res.json();
-        setError(data.detail || 'Failed to delete text');
+        setError(extractError(data) || 'Failed to delete text');
       }
     } catch (err) {
       setError('Network error while deleting text');

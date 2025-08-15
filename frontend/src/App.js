@@ -284,7 +284,7 @@ function App() {
       if (res.ok) {
         setText(data.text);
       } else {
-        setError(data.error || 'Error extracting text');
+        setError(extractError(data) || 'Error extracting text');
       }
     } catch (err) {
       setError('Network error');
