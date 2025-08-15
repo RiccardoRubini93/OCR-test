@@ -146,53 +146,52 @@ function SavedTexts({ projectId }) {
           {texts.length === 0 ? (
             <div style={{ color: '#bfc9d9', fontSize: 20 }}>No saved texts yet.</div>
           ) : (
-            texts.map((item) => (
-              <div key={item.id} className="mx-auto w-100" style={{ background: '#191919', borderRadius: 20, boxShadow: '0 2px 12px rgba(162,89,255,0.08)', padding: 32, color: '#fff', fontSize: 18, fontWeight: 500, maxWidth: 900, border: '1.5px solid #232323' }}>
-                {/* Selection Checkbox and Delete Button */}
-                <div className="d-flex justify-content-between align-items-start mb-3">
-                  <div className="form-check text-selection-checkbox">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={selectedTexts.has(item.id)}
-                      onChange={() => handleSelectText(item.id)}
-                      id={`checkbox-${item.id}`}
-                    />
-                    <label className="form-check-label" htmlFor={`checkbox-${item.id}`}>
-                      Select for bulk action
-                    </label>
+            <div className="row g-4">
+              {texts.map((item) => (
+                <div key={item.id} className="col-12 col-sm-6 col-md-4">
+                  <div className="card h-100" style={{ background: '#191919', borderRadius: 14, boxShadow: '0 2px 12px rgba(162,89,255,0.04)', padding: 16, color: '#fff', border: '1.5px solid #232323' }}>
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          checked={selectedTexts.has(item.id)}
+                          onChange={() => handleSelectText(item.id)}
+                          id={`checkbox-${item.id}`}
+                        />
+                        <label className="form-check-label ms-2" htmlFor={`checkbox-${item.id}`} style={{ color: '#bfc9d9', fontSize: 14 }}>
+                          Select
+                        </label>
+                      </div>
+
+                      <button
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() => handleDeleteText(item.id)}
+                        title="Delete this text"
+                      >
+                        <i className="bi bi-trash"></i>
+                      </button>
+                    </div>
+
+                    {/* Title / filename */}
+                    <div style={{ marginBottom: 8 }}>
+                      <h5 style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.filename || item.name || ''}>
+                        <i className="bi bi-image me-2" style={{ color: '#4f8cff' }}></i>
+                        {item.filename || item.name || 'Untitled'}
+                      </h5>
+                    </div>
+
+                    <div style={{ marginBottom: 8, color: '#bfc9d9', fontSize: 13 }}>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
+                    </div>
+
+                    <div style={{ background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, height: 160, overflow: 'auto' }}>
+                      {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+                    </div>
                   </div>
-                  
-                  <button
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => handleDeleteText(item.id)}
-                    title="Delete this text"
-                  >
-                    <i className="bi bi-trash"></i>
-                  </button>
                 </div>
-                
-                {/* Text Name - Display prominently */}
-                {item.name && (
-                  <div style={{ marginBottom: 16, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(79,140,255,0.1), rgba(162,89,255,0.1))', borderRadius: 12, border: '1px solid rgba(79,140,255,0.2)' }}>
-                    <h4 style={{ margin: 0, color: '#4f8cff', fontWeight: 600, fontSize: 20 }}>
-                      <i className="bi bi-tag me-2"></i>
-                      {item.name}
-                    </h4>
-                  </div>
-                )}
-                
-                <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
-                  <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
-                </div>
-                {item.filename && (
-                  <div style={{ marginBottom: 10, color: '#bfc9d9', fontSize: 16 }}>
-                    <span style={{ fontWeight: 700, color: '#fff' }}>File:</span> {item.filename}
-                  </div>
-                )}
-                <pre style={{ background: '#232323', padding: 20, borderRadius: 12, fontSize: 17, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, margin: 0, boxShadow: '0 1px 4px rgba(162,89,255,0.05)' }}>{item.text}</pre>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       )}

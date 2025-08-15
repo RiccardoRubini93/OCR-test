@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SavedTexts from './SavedTexts';
-import QueryTexts from './QueryTexts';
-import SimilaritySearch from './SimilaritySearch';
+
 import StatsAndQuery from './StatsAndQuery';
 import Summarize from './Summarize';
 import { apiUrl } from './api';
@@ -338,8 +337,6 @@ function App() {
         <div className="d-flex flex-wrap gap-2 gap-md-3 align-items-center">
           <button onClick={() => setPage('ocr')} className={`btn ${page === 'ocr' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'ocr')}>OCR Image</button>
           <button onClick={() => setPage('saved')} className={`btn ${page === 'saved' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'saved')}>Saved Texts</button>
-          <button onClick={() => setPage('query')} className={`btn ${page === 'query' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'query')}>Query Texts</button>
-          <button onClick={() => setPage('similarity')} className={`btn ${page === 'similarity' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'similarity')}>Similarity Search</button>
           <button onClick={() => setPage('stats')} className={`btn ${page === 'stats' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'stats')}>Stats & Query</button>
           <button onClick={() => setPage('summarize')} className={`btn ${page === 'summarize' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'summarize')}>Summarize</button>
         </div>
@@ -458,7 +455,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <QueryTexts projectId={currentProjectId} />
+
         </div>
       </>
     );
@@ -469,7 +466,7 @@ function App() {
       <>
         {nav}
         <div className="main-responsive-box" style={mainBox}>
-          <SimilaritySearch projectId={currentProjectId} />
+
         </div>
       </>
     );
