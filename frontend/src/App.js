@@ -55,6 +55,16 @@ function App() {
   const [showProjectManageModal, setShowProjectManageModal] = useState(false);
   const [projectActionLoading, setProjectActionLoading] = useState(false);
 
+  // Helper: safely parse the currentProjectId into an integer or return null
+  const parseProjectId = (id) => {
+    if (id === null || id === undefined) return null;
+    if (typeof id === 'number') return Number.isFinite(id) ? id : null;
+    const s = String(id).trim();
+    if (s === '') return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
   // Debug function to check modal state
   const handleOpenModal = () => {
     console.log('Opening modal, current state:', showProjectModal);
@@ -68,7 +78,11 @@ function App() {
   };
 
   const handleClearProject = async () => {
-    if (!currentProjectId) return;
+    const pid = parseProjectId(currentProjectId);
+    if (pid === null) {
+      alert('No project selected');
+      return;
+    }
     
     if (!confirm('Are you sure you want to clear all content from this project? This action cannot be undone.')) {
       return;
@@ -76,7 +90,7 @@ function App() {
 
     setProjectActionLoading(true);
     try {
-      const res = await fetch(apiUrl(`/projects/${currentProjectId}/content`), {
+      const res = await fetch(apiUrl(`/projects/${pid}/content`), {
         method: 'DELETE',
       });
       
@@ -101,9 +115,13 @@ function App() {
   };
 
   const handleDeleteProject = async () => {
-    if (!currentProjectId) return;
+    const pid = parseProjectId(currentProjectId);
+    if (pid === null) {
+      alert('No project selected');
+      return;
+    }
     
-    const currentProject = projects.find(p => String(p.id) === currentProjectId);
+    const currentProject = projects.find(p => p.id === pid);
     if (!currentProject) return;
     
     if (!confirm(`Are you sure you want to delete the project "${currentProject.name}" and ALL its content? This action cannot be undone.`)) {
@@ -112,7 +130,7 @@ function App() {
 
     setProjectActionLoading(true);
     try {
-      const res = await fetch(apiUrl(`/projects/${currentProjectId}`), {
+      const res = await fetch(apiUrl(`/projects/${pid}`), {
         method: 'DELETE',
       });
       
@@ -270,7 +288,8 @@ function App() {
       // Optionally allow model override via query or future UI; use backend default if not provided
     }
     if (currentProjectId) {
-      url += `&project_id=${encodeURIComponent(currentProjectId)}`;
+      const pid = parseProjectId(currentProjectId);
+      if (pid !== null) url += `&project_id=${encodeURIComponent(pid)}`;
     }
     if (textName.trim()) {
       url += `&name=${encodeURIComponent(textName.trim())}`;
@@ -959,4 +978,4 @@ const navBtnStyle = (active) => ({
   transition: 'background 0.2s, color 0.2s',
 });
 
-export default App; 
+export default App;

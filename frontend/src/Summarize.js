@@ -276,7 +276,19 @@ function Summarize({ projectId }) {
             <label className="form-label" style={{ color: '#fff', fontWeight: 600 }}>Preview</label>
             <div style={{ background: '#191919', padding: 16, borderRadius: 12, border: '1.5px solid #232323', minHeight: 120, color: '#bfc9d9', fontSize: 15 }}>
               {summarizeAll ? (
-                <span>All texts in {projectId ? `project ${projectId}` : 'the entire database'} will be summarized.</span>
+                <div>
+                  <div style={{ marginBottom: 12, color: '#fff', fontWeight: 500 }}>
+                    Summary of all texts in {projectId ? `project ${projectId}` : 'the entire database'}:
+                  </div>
+                  <ul style={{ paddingLeft: 20, margin: 0 }}>
+                    {texts.filter(t => projectId ? t.project_id === Number(projectId) : true).map(t => (
+                      <li key={t.id} style={{ marginBottom: 8 }}>
+                        <strong style={{ color: '#4f8cff' }}>{t.name || `Document #${t.id}`}</strong> {t.filename ? `(${t.filename})` : ''} <br />
+                        <span style={{ color: '#bfc9d9', fontSize: 13 }}>Created at: {new Date(t.created_at).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : selectedText ? (
                 <div>
                   {selectedText.name && (
@@ -304,27 +316,21 @@ function Summarize({ projectId }) {
           </div>
         </div>
 
-        <div>
-          <button type="submit" className="btn btn-primary" disabled={loading || (!summarizeAll && !selectedId)} style={{ borderRadius: 12, padding: '14px 36px', fontWeight: 700, fontSize: 18 }}>
-            {loading ? 'Summarizing...' : (summarizeAll ? 'Summarize All' : 'Summarize')}
-          </button>
-          {summary && (
-            <button type="button" onClick={handleSavePdf} className="btn btn-outline-light ms-2" style={{ borderRadius: 12, padding: '14px 24px', fontWeight: 700, fontSize: 18 }}>
-              Save as PDF
-            </button>
-          )}
+        <div className="col-12 d-flex gap-2 align-items-center mt-2">
+          <button type="submit" className="btn btn-primary" disabled={loading || (!summarizeAll && !selectedId)}>{loading ? 'Summarizing...' : (summarizeAll ? 'Summarize All' : 'Summarize')}</button>
+          <button type="button" className="btn btn-outline-light" onClick={() => { setSummary(''); setError(''); }}>Reset</button>
         </div>
       </form>
 
-      {error && <div style={{ color: '#e63946', marginTop: 16 }}>{error}</div>}
+      {error && <div style={{ color: '#e63946', marginTop: 12 }}>{error}</div>}
       {summary && (
-        <div style={{ marginTop: 24 }}>
-          <h4 style={{ ...accentText, fontSize: 28, marginBottom: 12 }}>Summary</h4>
-          <pre style={{ background: '#191919', padding: 20, borderRadius: 12, fontSize: 17, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, margin: 0, boxShadow: '0 1px 4px rgba(162,89,255,0.05)' }}>{summary}</pre>
+        <div style={{ marginTop: 16 }}>
+          <h5 style={{ color: '#fff' }}>Summary</h5>
+          <pre style={{ background: '#111', padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap', color: '#fff' }}>{summary}</pre>
         </div>
       )}
     </div>
   );
 }
 
-export default Summarize; 
+export default Summarize;
