@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { apiUrl } from './api';
 
 const accentGradient = 'linear-gradient(90deg, #a259ff 0%, #4f8cff 100%)';
@@ -11,10 +11,52 @@ const accentText = {
 
 function SavedTexts({ projectId }) {
   const [texts, setTexts] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedTexts, setSelectedTexts] = useState(new Set());
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState(new Set());
+
+  // Memoize grouping of texts by project_id
+  const groups = useMemo(() => {
+    const g = {};
+    texts.forEach(t => {
+      const key = t.project_id != null ? String(t.project_id) : 'no_project';
+      if (!g[key]) g[key] = [];
+      g[key].push(t);
+    });
+    return g;
+  }, [texts]);
+
+  // Build ordered keys from projects and groups
+  const orderedKeys = useMemo(() => {
+    const keys = Object.keys(groups).filter(k => k !== 'no_project');
+    const projectsMap = {};
+    projects.forEach(p => { projectsMap[String(p.id)] = p.name; });
+    keys.sort((a,b) => {
+      const na = projectsMap[a] || a;
+      const nb = projectsMap[b] || b;
+      return na.localeCompare(nb);
+    });
+    if (groups['no_project']) keys.push('no_project');
+    return keys;
+  }, [groups, projects]);
+
+  // Default expand all groups when first loaded (only when no project selected)
+  useEffect(() => {
+    if (projectId) return;
+    if (orderedKeys.length === 0) return;
+    setExpandedGroups(prev => (prev.size > 0 ? prev : new Set(orderedKeys)));
+  }, [projectId, orderedKeys]);
+
+  const toggleGroup = (k) => {
+    setExpandedGroups(prev => {
+      const copy = new Set(prev);
+      if (copy.has(k)) copy.delete(k); else copy.add(k);
+      return copy;
+    });
+  };
 
   useEffect(() => {
     const fetchTexts = async () => {
@@ -29,6 +71,20 @@ function SavedTexts({ projectId }) {
       setLoading(false);
     };
     fetchTexts();
+  }, [projectId]);
+
+  // When no specific project is selected, load project list so we can map ids -> names
+  useEffect(() => {
+    if (projectId) return;
+    let mounted = true;
+    fetch(apiUrl('/projects/'))
+      .then(r => r.json())
+      .then(data => {
+        if (!mounted) return;
+        setProjects(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setProjects([]));
+    return () => { mounted = false; };
   }, [projectId]);
 
   const handleDeleteText = async (textId) => {
@@ -146,51 +202,104 @@ function SavedTexts({ projectId }) {
           {texts.length === 0 ? (
             <div style={{ color: '#bfc9d9', fontSize: 20 }}>No saved texts yet.</div>
           ) : (
-            <div className="row g-4">
-              {texts.map((item) => (
-                <div key={item.id} className="col-12 col-sm-6 col-md-4">
-                  <div className="card h-100" style={{ background: '#191919', borderRadius: 14, boxShadow: '0 2px 12px rgba(162,89,255,0.04)', padding: 16, color: '#fff', border: '1.5px solid #232323' }}>
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          checked={selectedTexts.has(item.id)}
-                          onChange={() => handleSelectText(item.id)}
-                          id={`checkbox-${item.id}`}
-                        />
-                        <label className="form-check-label ms-2" htmlFor={`checkbox-${item.id}`} style={{ color: '#bfc9d9', fontSize: 14 }}>
-                          Select
-                        </label>
-                      </div>
-
-                      <button
-                        className="btn btn-outline-danger btn-sm"
-                        onClick={() => handleDeleteText(item.id)}
-                        title="Delete this text"
-                      >
-                        <i className="bi bi-trash"></i>
-                      </button>
-                    </div>
-
-                    {/* Title / filename */}
-                    <div style={{ marginBottom: 8 }}>
-                      <h5 style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.filename || item.name || ''}>
-                        <i className="bi bi-image me-2" style={{ color: '#4f8cff' }}></i>
-                        {item.filename || item.name || 'Untitled'}
-                      </h5>
-                    </div>
-
-                    <div style={{ marginBottom: 8, color: '#bfc9d9', fontSize: 13 }}>
-                      <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
-                    </div>
-
-                    <div style={{ background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, height: 160, overflow: 'auto' }}>
-                      {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
-                    </div>
+            <div className="row">
+              <div className="col-12 col-md-3 d-none d-md-block">
+                {/* Sidebar TOC */}
+                <div style={{ position: 'sticky', top: 80 }}>
+                  <div style={{ color: '#bfc9d9', marginBottom: 8 }}>Projects</div>
+                  <div className="list-group">
+                    {orderedKeys.map(k => {
+                      const name = k === 'no_project' ? 'No Project' : (projects.find(p => String(p.id) === k)?.name || `Project ${k}`);
+                      return (
+                        <button
+                          key={k}
+                          className="list-group-item list-group-item-action"
+                          style={{ cursor: 'pointer', background: 'transparent', color: '#dbe7ff', border: '1px solid rgba(255,255,255,0.03)', marginBottom: 6 }}
+                          onClick={() => {
+                            const el = document.getElementById(`group-${k}`);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div style={{ textAlign: 'left' }}>{name}</div>
+                            <div style={{ color: '#9aa6c7', fontSize: 12 }}>{groups[k]?.length || 0}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="col-12 col-md-9">
+                {/* Render groups */}
+                {orderedKeys.map((key) => {
+                  const items = groups[key];
+                  const displayName = key === 'no_project' ? 'No Project' : (projects.find(p => String(p.id) === key)?.name || `Project ${key}`);
+                  const isExpanded = expandedGroups.has(key);
+                  return (
+                    <div key={key} id={`group-${key}`} style={{ borderRadius: 12, padding: 12, border: '1px solid rgba(255,255,255,0.03)', background: '#0f0f0f', marginBottom: 18 }}>
+                      <div className="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                          <h4 style={{ margin: 0, color: '#fff', fontSize: 18 }}>{displayName} <span style={{ color: '#9aa6c7', fontSize: 13 }}>({items.length})</span></h4>
+                          <div style={{ color: '#bfc9d9', fontSize: 13 }}>{key === 'no_project' ? 'Items without a project' : ''}</div>
+                        </div>
+                        <div className="d-flex gap-2 align-items-center">
+                          <button className="btn btn-sm btn-outline-light" onClick={() => toggleGroup(key)}>{isExpanded ? 'Collapse' : 'Expand'}</button>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="row g-4">
+                          {items.map(item => (
+                            <div key={item.id} className="col-12 col-sm-6 col-md-4">
+                              <div className="card h-100" style={{ background: '#191919', borderRadius: 14, boxShadow: '0 2px 12px rgba(162,89,255,0.04)', padding: 16, color: '#fff', border: '1.5px solid #232323' }}>
+                                <div className="d-flex justify-content-between align-items-start mb-2">
+                                  <div className="form-check">
+                                    <input
+                                      className="form-check-input"
+                                      type="checkbox"
+                                      checked={selectedTexts.has(item.id)}
+                                      onChange={() => handleSelectText(item.id)}
+                                      id={`checkbox-${item.id}`}
+                                    />
+                                    <label className="form-check-label ms-2" htmlFor={`checkbox-${item.id}`} style={{ color: '#bfc9d9', fontSize: 14 }}>
+                                      Select
+                                    </label>
+                                  </div>
+
+                                  <button
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={() => handleDeleteText(item.id)}
+                                    title="Delete this text"
+                                  >
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                </div>
+
+                                <div style={{ marginBottom: 8 }}>
+                                  <h5 style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.filename || item.name || ''}>
+                                    <i className="bi bi-image me-2" style={{ color: '#4f8cff' }}></i>
+                                    {item.filename || item.name || 'Untitled'}
+                                  </h5>
+                                </div>
+
+                                <div style={{ marginBottom: 8, color: '#bfc9d9', fontSize: 13 }}>
+                                  <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
+                                </div>
+
+                                <div style={{ background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, height: 140, overflow: 'auto' }}>
+                                  {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
