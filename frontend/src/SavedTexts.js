@@ -20,6 +20,16 @@ function SavedTexts({ projectId }) {
   const [hoveredId, setHoveredId] = useState(null);
   const [fullscreenId, setFullscreenId] = useState(null);
 
+  // Summarize modal state
+  const [showSummarizeModal, setShowSummarizeModal] = useState(false);
+  const [summarizeLoading, setSummarizeLoading] = useState(false);
+  const [summarizeError, setSummarizeError] = useState('');
+  const [summarizeResult, setSummarizeResult] = useState('');
+  const [sumProvider, setSumProvider] = useState('openai');
+  const [sumLength, setSumLength] = useState('medium');
+  const [sumFormat, setSumFormat] = useState('bullets');
+  const [sumInstructions, setSumInstructions] = useState('');
+
   // Memoize grouping of texts by project_id
   const groups = useMemo(() => {
     const g = {};
@@ -172,6 +182,43 @@ function SavedTexts({ projectId }) {
   }, []);
 
   const fullscreenItem = fullscreenId ? texts.find(t => t.id === fullscreenId) : null;
+
+  // Summarize handler (uses backend /texts/summarize)
+  const handleGenerateSummary = async (e) => {
+    e && e.preventDefault && e.preventDefault();
+    setSummarizeError('');
+    setSummarizeResult('');
+    if (!fullscreenId) {
+      setSummarizeError('No text selected');
+      return;
+    }
+    setSummarizeLoading(true);
+    try {
+      const payload = {
+        provider: sumProvider,
+        model: sumProvider === 'ollama' ? undefined : undefined,
+        text_id: Number(fullscreenId),
+        summary_length: sumLength,
+        format: sumFormat,
+        instructions: sumInstructions ? sumInstructions.trim() : undefined,
+      };
+      const res = await fetch(apiUrl('/texts/summarize'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSummarizeResult(data.summary || '');
+      } else {
+        setSummarizeError(extractError(data) || 'Failed to summarize');
+      }
+    } catch (err) {
+      setSummarizeError('Network error');
+    } finally {
+      setSummarizeLoading(false);
+    }
+  };
 
   return (
     <div className="main-responsive-box" style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 5vw' }}>
@@ -384,6 +431,7 @@ function SavedTexts({ projectId }) {
                 <div style={{ color: '#9aa6c7', fontSize: 13 }}>{new Date(fullscreenItem.created_at).toLocaleString()}</div>
               </div>
               <div>
+                <button className="btn btn-sm btn-secondary me-2" onClick={() => setShowSummarizeModal(true)}>Summarize</button>
                 <button className="btn btn-sm btn-light" onClick={() => setFullscreenId(null)}>Close</button>
               </div>
             </div>
@@ -403,6 +451,64 @@ function SavedTexts({ projectId }) {
                 {fullscreenItem.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summarize modal */}
+      {showSummarizeModal && (
+        <div onClick={() => setShowSummarizeModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10010, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 760, background: '#0b0b0b', borderRadius: 12, padding: 18, color: '#fff' }}>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h4 style={{ margin: 0 }}>Generate Summary</h4>
+              <div>
+                <button className="btn btn-sm btn-light" onClick={() => setShowSummarizeModal(false)}>Close</button>
+              </div>
+            </div>
+
+            <form onSubmit={handleGenerateSummary} className="row g-2">
+              <div className="col-12 col-md-4">
+                <label className="form-label" style={{ color: '#bfc9d9', fontSize: 13 }}>Provider</label>
+                <select className="form-select bg-dark text-white" value={sumProvider} onChange={e => setSumProvider(e.target.value)}>
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label" style={{ color: '#bfc9d9', fontSize: 13 }}>Length</label>
+                <select className="form-select bg-dark text-white" value={sumLength} onChange={e => setSumLength(e.target.value)}>
+                  <option value="short">Short</option>
+                  <option value="medium">Medium</option>
+                  <option value="long">Long</option>
+                </select>
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label" style={{ color: '#bfc9d9', fontSize: 13 }}>Format</label>
+                <select className="form-select bg-dark text-white" value={sumFormat} onChange={e => setSumFormat(e.target.value)}>
+                  <option value="bullets">Bullets</option>
+                  <option value="plain">Plain</option>
+                </select>
+              </div>
+
+              <div className="col-12">
+                <label className="form-label" style={{ color: '#bfc9d9', fontSize: 13 }}>Optional instructions</label>
+                <input className="form-control bg-dark text-white" value={sumInstructions} onChange={e => setSumInstructions(e.target.value)} placeholder="Extra guidance (optional)" />
+              </div>
+
+              <div className="col-12 d-flex gap-2 align-items-center mt-2">
+                <button type="submit" className="btn btn-primary" disabled={summarizeLoading}>{summarizeLoading ? 'Generating...' : 'Generate Summary'}</button>
+                <button type="button" className="btn btn-outline-light" onClick={() => { setSummarizeResult(''); setSummarizeError(''); }}>Reset</button>
+              </div>
+            </form>
+
+            {summarizeError && <div style={{ color: '#e63946', marginTop: 12 }}>{summarizeError}</div>}
+            {summarizeResult && (
+              <div style={{ marginTop: 16 }}>
+                <h5 style={{ color: '#fff' }}>Summary</h5>
+                <pre style={{ background: '#111', padding: 12, borderRadius: 8, whiteSpace: 'pre-wrap', color: '#fff' }}>{summarizeResult}</pre>
+              </div>
+            )}
           </div>
         </div>
       )}
