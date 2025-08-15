@@ -17,6 +17,8 @@ function SavedTexts({ projectId }) {
   const [selectedTexts, setSelectedTexts] = useState(new Set());
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(new Set());
+  const [hoveredId, setHoveredId] = useState(null);
+  const [fullscreenId, setFullscreenId] = useState(null);
 
   // Memoize grouping of texts by project_id
   const groups = useMemo(() => {
@@ -160,6 +162,17 @@ function SavedTexts({ projectId }) {
     setSelectedTexts(newSet);
   };
 
+  // Close fullscreen on ESC
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') setFullscreenId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const fullscreenItem = fullscreenId ? texts.find(t => t.id === fullscreenId) : null;
+
   return (
     <div className="main-responsive-box" style={{ width: '100%', maxWidth: 1100, margin: '0 auto', padding: '0 5vw' }}>
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -251,49 +264,97 @@ function SavedTexts({ projectId }) {
 
                       {isExpanded && (
                         <div className="row g-4">
-                          {items.map(item => (
-                            <div key={item.id} className="col-12 col-sm-6 col-md-4">
-                              <div className="card h-100" style={{ background: '#191919', borderRadius: 14, boxShadow: '0 2px 12px rgba(162,89,255,0.04)', padding: 16, color: '#fff', border: '1.5px solid #232323' }}>
-                                <div className="d-flex justify-content-between align-items-start mb-2">
-                                  <div className="form-check">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      checked={selectedTexts.has(item.id)}
-                                      onChange={() => handleSelectText(item.id)}
-                                      id={`checkbox-${item.id}`}
-                                    />
-                                    <label className="form-check-label ms-2" htmlFor={`checkbox-${item.id}`} style={{ color: '#bfc9d9', fontSize: 14 }}>
-                                      Select
-                                    </label>
-                                  </div>
-
-                                  <button
-                                    className="btn btn-outline-danger btn-sm"
-                                    onClick={() => handleDeleteText(item.id)}
-                                    title="Delete this text"
+                            {items.map(item => {
+                              const isHovered = hoveredId === item.id;
+                              return (
+                                <div key={item.id} className="col-12 col-sm-6 col-md-6">
+                  <div
+                    className="card h-100"
+                    onMouseEnter={() => { setHoveredId(item.id); if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover)').matches) setFullscreenId(item.id); }}
+                    onMouseLeave={() => setHoveredId(null)}
+                    onFocus={() => setHoveredId(item.id)}
+                    onBlur={() => setHoveredId(null)}
+                    onClick={() => { if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(hover: hover)').matches) return; setFullscreenId(item.id); }}
+                    tabIndex={0}
+                    role="button"
+                                    style={{
+                                      background: '#191919',
+                                      borderRadius: 14,
+                                      boxShadow: isHovered ? '0 8px 24px rgba(162,89,255,0.12)' : '0 2px 12px rgba(162,89,255,0.04)',
+                                      padding: 16,
+                                      color: '#fff',
+                                      border: '1.5px solid #232323',
+                                      transform: isHovered ? 'scale(1.02)' : 'scale(1)',
+                                      transition: 'transform 180ms ease, box-shadow 180ms ease',
+                                      zIndex: isHovered ? 20 : 'auto'
+                                    }}
                                   >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
-                                </div>
+                                    <div className="d-flex justify-content-between align-items-start mb-2">
+                                      <div className="form-check">
+                                        <input
+                                          className="form-check-input"
+                                          type="checkbox"
+                                          checked={selectedTexts.has(item.id)}
+                                          onChange={() => handleSelectText(item.id)}
+                                          id={`checkbox-${item.id}`}
+                                        />
+                                        <label className="form-check-label ms-2" htmlFor={`checkbox-${item.id}`} style={{ color: '#bfc9d9', fontSize: 14 }}>
+                                          Select
+                                        </label>
+                                      </div>
 
-                                <div style={{ marginBottom: 8 }}>
-                                  <h5 style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.filename || item.name || ''}>
-                                    <i className="bi bi-image me-2" style={{ color: '#4f8cff' }}></i>
-                                    {item.filename || item.name || 'Untitled'}
-                                  </h5>
-                                </div>
+                                      <button
+                                        className="btn btn-outline-danger btn-sm"
+                                        onClick={() => handleDeleteText(item.id)}
+                                        title="Delete this text"
+                                      >
+                                        <i className="bi bi-trash"></i>
+                                      </button>
+                                    </div>
 
-                                <div style={{ marginBottom: 8, color: '#bfc9d9', fontSize: 13 }}>
-                                  <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
-                                </div>
+                                    <div style={{ marginBottom: 8, display: 'flex', gap: 10, alignItems: 'center' }}>
+                                      <div style={{ width: 56, height: 56, flex: '0 0 56px', borderRadius: 10, overflow: 'hidden', background: '#0b0b0b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        {item.image_url ? (
+                                          <img src={item.image_url} alt={item.filename || item.name || 'preview'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                          <div style={{ color: '#6b7280' }}><i className="bi bi-card-image" style={{ fontSize: 22 }} /></div>
+                                        )}
+                                      </div>
+                                      <h5 style={{ margin: 0, color: '#fff', fontWeight: 700, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.filename || item.name || ''}>
+                                        {item.filename || item.name || 'Untitled'}
+                                      </h5>
+                                    </div>
 
-                                <div style={{ background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, height: 140, overflow: 'auto' }}>
-                                  {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+                                    <div style={{ marginBottom: 8, color: '#bfc9d9', fontSize: 13 }}>
+                                      <span style={{ fontWeight: 700, color: '#fff' }}>Saved:</span> {new Date(item.created_at).toLocaleString()}
+                                    </div>
+
+                                    {isHovered ? (
+                                      <div style={{ display: 'flex', gap: 12 }}>
+                                        <div style={{ flex: '0 0 36%', minHeight: 140, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa6c7', fontSize: 13, overflow: 'hidden' }}>
+                                          {item.image_url ? (
+                                            <img src={item.image_url} alt={item.filename || item.name || 'preview'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <div style={{ textAlign: 'center', padding: 8, background: 'linear-gradient(135deg,#0f1724,#111827)', width: '100%', height: '100%' }}>
+                                              <div style={{ fontSize: 28, marginBottom: 6 }}><i className="bi bi-card-image" /></div>
+                                              <div style={{ fontSize: 12 }}>No image stored</div>
+                                              <div style={{ fontSize: 11, color: '#6b7280' }}>{item.filename || ''}</div>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div style={{ flex: '1 1 64%', minHeight: 140, background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', overflow: 'auto' }}>
+                                          {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div style={{ background: '#232323', padding: 12, borderRadius: 10, fontSize: 14, color: '#fff', whiteSpace: 'pre-wrap', fontWeight: 500, height: 140, overflow: 'auto' }}>
+                                        {item.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          ))}
+                              );
+                            })}
                         </div>
                       )}
                     </div>
@@ -304,8 +365,51 @@ function SavedTexts({ projectId }) {
           )}
         </div>
       )}
+
+      {/* Fullscreen overlay */}
+      {fullscreenItem && (
+        <div
+          onClick={() => setFullscreenId(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            style={{ width: '100%', maxWidth: 1000, maxHeight: '90vh', background: '#0b0b0b', borderRadius: 12, padding: 18, overflow: 'auto', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}
+          >
+            <div className="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <h3 style={{ margin: 0, color: '#fff' }}>{fullscreenItem.filename || fullscreenItem.name || 'Untitled'}</h3>
+                <div style={{ color: '#9aa6c7', fontSize: 13 }}>{new Date(fullscreenItem.created_at).toLocaleString()}</div>
+              </div>
+              <div>
+                <button className="btn btn-sm btn-light" onClick={() => setFullscreenId(null)}>Close</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
+              <div style={{ flex: '0 0 48%', maxHeight: '70vh', overflow: 'hidden', borderRadius: 8, background: '#111' }}>
+                {fullscreenItem.image_url ? (
+                  <img src={fullscreenItem.image_url} alt={fullscreenItem.filename || fullscreenItem.name || 'preview'} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                ) : (
+                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
+                    <i className="bi bi-card-image" style={{ fontSize: 48 }} />
+                  </div>
+                )}
+              </div>
+
+              <div style={{ flex: '1 1 52%', background: '#111318', padding: 12, borderRadius: 8, color: '#fff', overflow: 'auto', maxHeight: '70vh', whiteSpace: 'pre-wrap' }}>
+                {fullscreenItem.text || <span style={{ color: '#9aa6c7' }}>No extracted text</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default SavedTexts; 
+
+// Fullscreen overlay styles are rendered inside the component via portal-like markup in SavedTexts

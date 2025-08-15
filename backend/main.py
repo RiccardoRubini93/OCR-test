@@ -1,5 +1,9 @@
 import os
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from pathlib import Path
+import io
+from uuid import uuid4
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 # Removed early utils import so .env loads first
 from openai import OpenAI
@@ -35,6 +39,11 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI()
+
+# Ensure uploads directory exists and serve it at /uploads
+UPLOADS_DIR = Path("uploads")
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -185,13 +194,23 @@ async def get_project(project_id: int):
 
 
 @app.post("/ocr/")
-async def ocr_image(file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None, name: str = None):
+async def ocr_image(file: UploadFile = File(...), provider: str = None, model: str = None, project_id: int | None = None, name: str | None = None):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
     try:
-        # Load original image
-        original_image = Image.open(file.file)
+        # Read uploaded bytes and create Pillow image from bytes
+        content = await file.read()
+        original_image = Image.open(io.BytesIO(content))
         img_base64 = pil_image_to_base64_png(original_image)
+
+        # Save original uploaded file to uploads directory with a safe unique name
+        safe_basename = os.path.basename(file.filename or "upload.png")
+        # sanitize basic characters
+        safe_basename = "".join(c for c in safe_basename if c.isalnum() or c in "._-") or "upload.png"
+        saved_name = f"{uuid4().hex}_{safe_basename}"
+        saved_path = UPLOADS_DIR / saved_name
+        with open(saved_path, "wb") as f:
+            f.write(content)
 
         use_provider = provider or DEFAULT_PROVIDER
         extracted_text = None
@@ -274,19 +293,19 @@ async def ocr_image(file: UploadFile = File(...), provider: str = None, model: s
             )
             embedding = emb_response.data[0].embedding if extracted_text.strip() else None
 
-        # Save to DB
+        # Save to DB (store the saved filename so we can serve the image later)
         async with SessionLocal() as session:
             db_obj = HandwrittenText(
-                name=name, 
-                filename=file.filename, 
-                text=extracted_text, 
-                embedding=embedding, 
+                name=name,
+                filename=saved_name,
+                text=extracted_text,
+                embedding=embedding,
                 project_id=project_id
             )
             session.add(db_obj)
             await session.commit()
 
-        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id, "name": name}
+        return {"text": extracted_text, "provider": final_provider_used, "project_id": project_id, "name": name, "saved_filename": saved_name}
     except Exception as e:
         print("Exception in /ocr/:", e)
         traceback.print_exc()
@@ -301,7 +320,7 @@ async def get_texts(project_id: int | None = None):
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
 
 @app.get("/texts/search")
@@ -313,7 +332,7 @@ async def search_texts(q: str = Query(..., min_length=1), project_id: int | None
         result = await session.execute(stmt)
         items = result.scalars().all()
         return [
-            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
+            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "project_id": i.project_id} for i in items
         ]
 
 @app.delete("/texts/{text_id}")
@@ -443,7 +462,7 @@ async def similarity_search(body: SimilarityQuery):
                 continue
         scored.sort(reverse=True, key=lambda x: x[0])
         top = [
-            {"id": i.id, "name": i.name, "filename": i.filename, "text": i.text, "created_at": i.created_at.isoformat(), "score": sim, "project_id": i.project_id}
+            {"id": i.id, "name": i.name, "filename": i.filename, "image_url": (f"/uploads/{i.filename}" if i.filename else None), "text": i.text, "created_at": i.created_at.isoformat(), "score": sim, "project_id": i.project_id}
             for sim, i in scored[:10]
         ]
         return top 
