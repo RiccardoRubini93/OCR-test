@@ -50,7 +50,8 @@ function App() {
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [projectError, setProjectError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [theme, setTheme] = useState(() => (typeof window !== 'undefined' ? (localStorage.getItem('theme') || 'dark') : 'dark'));
+  // Theme fixed to dark (removed toggle)
+  const theme = 'dark';
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showProjectManageModal, setShowProjectManageModal] = useState(false);
   const [projectActionLoading, setProjectActionLoading] = useState(false);
@@ -172,11 +173,6 @@ function App() {
     if (savedProvider) setProvider(savedProvider);
     if (savedOllamaModel) setOllamaModel(savedOllamaModel);
   }, []);
-
-  useEffect(() => {
-    document.body.classList.toggle('theme-light', theme === 'light');
-    if (typeof window !== 'undefined') localStorage.setItem('theme', theme);
-  }, [theme]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') localStorage.setItem('ocr_provider', provider);
@@ -350,8 +346,7 @@ function App() {
           <span className="brand sheen" style={{ fontSize: 20 }}>OCR AI</span>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button className={`btn btn-sm ${theme === 'dark' ? 'btn-primary' : 'btn-outline-light'}`} onClick={() => setTheme('dark')}>Dark</button>
-          <button className={`btn btn-sm ${theme === 'light' ? 'btn-primary' : 'btn-outline-light'}`} onClick={() => setTheme('light')}>Light</button>
+          {/* Theme fixed to dark; toggles removed */}
         </div>
         <div className="d-flex flex-wrap gap-2 gap-md-3 align-items-center">
           <button onClick={() => setPage('ocr')} className={`btn ${page === 'ocr' ? 'btn-primary' : 'btn-outline-light'}`} style={navBtnStyle(page === 'ocr')}>OCR Image</button>
